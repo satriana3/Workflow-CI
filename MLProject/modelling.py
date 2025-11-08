@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py 
+# modelling.py
 # ======================================================
 
 import argparse
@@ -23,35 +23,37 @@ def main(data_path):
     # 1. Load dataset
     # ===============================
     df = pd.read_csv(data_path)
-    target_column = 'average_score_binned'
+    target_column = "average_score_binned"
 
-    X = df.drop([target_column, 'average_score'], axis=1, errors='ignore')
+    X = df.drop([target_column, "average_score"], axis=1, errors="ignore")
     y = df[target_column]
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
     # ===============================
-    # 2. Setup MLflow Tracking
+    # 2. MLflow setup
     # ===============================
-    # Saat dijalankan di GitHub Actions (CI), JANGAN ubah tracking URI
     if not os.getenv("GITHUB_ACTIONS"):
         mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
     mlflow.set_experiment("Student Performance Workflow CI")
 
-    # Cek apakah sudah ada run aktif
+    # ✅ FIX utama: deteksi run aktif DENGAN aman
     active_run = mlflow.active_run()
-    if active_run:
-        print(f"ℹ️ Detected existing MLflow run: {active_run.info.run_id}")
-        run_training(X_train, X_test, y_train, y_test)
+    if active_run is None:
+        print("ℹ️ Tidak ada active run dari MLflow, memulai run baru (local mode)...")
+        run = mlflow.start_run(run_name="RandomForest_StudentPerformance")
+        print(f"Run baru dimulai: {run.info.run_id}")
+        train_and_log_model(X_train, X_test, y_train, y_test)
+        mlflow.end_run()
     else:
-        print("ℹ️ No active MLflow run found, starting a new one (local mode)...")
-        with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
-            run_training(X_train, X_test, y_train, y_test)
+        print(f"ℹ️ Detected MLflow active run dari environment CI: {active_run.info.run_id}")
+        train_and_log_model(X_train, X_test, y_train, y_test)
 
 
-def run_training(X_train, X_test, y_train, y_test):
+def train_and_log_model(X_train, X_test, y_train, y_test):
     # ===============================
     # 3. Hyperparameters
     # ===============================
@@ -59,7 +61,7 @@ def run_training(X_train, X_test, y_train, y_test):
         "n_estimators": 100,
         "max_depth": None,
         "min_samples_split": 2,
-        "random_state": 42
+        "random_state": 42,
     }
     mlflow.log_params(params)
 
@@ -106,7 +108,7 @@ def run_training(X_train, X_test, y_train, y_test):
     mlflow.log_artifact(report_path)
 
     # ===============================
-    # 8. Save model
+    # 8. Save Model
     # ===============================
     os.makedirs("output", exist_ok=True)
     model_path = "output/random_forest_model.pkl"
