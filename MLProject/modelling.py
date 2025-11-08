@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py
+# modelling.py 
 # ======================================================
 
 import argparse
@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import mlflow
 import mlflow.sklearn
-
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
@@ -35,7 +34,7 @@ def main(data_path):
     # ===============================
     # 2. Setup MLflow Tracking
     # ===============================
-    # Jangan ubah tracking URI kalau dijalankan lewat mlflow run (CI)
+    # Saat dijalankan di GitHub Actions (CI), JANGAN ubah tracking URI
     if not os.getenv("GITHUB_ACTIONS"):
         mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
@@ -43,12 +42,11 @@ def main(data_path):
 
     # Cek apakah sudah ada run aktif
     active_run = mlflow.active_run()
-
     if active_run:
-        print(f"ℹ️ Using existing run ID: {active_run.info.run_id}")
+        print(f"ℹ️ Detected existing MLflow run: {active_run.info.run_id}")
         run_training(X_train, X_test, y_train, y_test)
     else:
-        print("ℹ️ No active run found, starting a new MLflow run...")
+        print("ℹ️ No active MLflow run found, starting a new one (local mode)...")
         with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
             run_training(X_train, X_test, y_train, y_test)
 
