@@ -37,10 +37,11 @@ def main(data_path):
     # ===============================
     # 2. Set Experiment
     # ===============================
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("Student Performance Workflow CI")
 
     # Jalankan di dalam run MLflow
-    with mlflow.start_run(run_name="RandomForest_StudentPerformance") as run:
+    with mlflow.start_run(run_name="RandomForest_StudentPerformance", nested=True) as run:
         run_id = run.info.run_id
         print(f"Dijalankan lewat MLflow Project. Run ID: {run_id}")
 
