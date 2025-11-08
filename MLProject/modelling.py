@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py
+# modelling.py (Final, CI/CD Ready)
 # ======================================================
 
 import argparse
@@ -21,98 +21,110 @@ import mlflow.sklearn
 
 
 def main(data_path):
-    # ===============================
-    # 1. Load dataset
-    # ===============================
+    # ==================================================
+    # 1. Load Dataset
+    # ==================================================
     df = pd.read_csv(data_path)
-    target_column = 'average_score_binned'
+    target_column = "average_score_binned"
 
-    X = df.drop([target_column, 'average_score'], axis=1, errors='ignore')
+    # Memastikan kolom target ada
+    if target_column not in df.columns:
+        raise ValueError(f"Kolom target '{target_column}' tidak ditemukan dalam dataset!")
+
+    X = df.drop([target_column, "average_score"], axis=1, errors="ignore")
     y = df[target_column]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    # ===============================
-    # 2. Set Experiment
-    # ===============================
+    # ==================================================
+    # 2. Setup MLflow
+    # ==================================================
+    # Gunakan database backend modern (SQLite)
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("Student Performance Workflow CI")
 
-    # Jalankan di dalam run MLflow
-    with mlflow.start_run(run_name="RandomForest_StudentPerformance", nested=True) as run:
-        run_id = run.info.run_id
-        print(f"Dijalankan lewat MLflow Project. Run ID: {run_id}")
+    # Dapatkan run aktif dari MLflow Projects
+    run = mlflow.active_run()
+    if run:
+        print(f"Active MLflow Run ID: {run.info.run_id}")
+    else:
+        print("⚠️ Tidak ada active run — menjalankan langsung dalam mode lokal.")
+        mlflow.start_run(run_name="StudentPerformance_Run")
 
-        # ===============================
-        # 3. Hyperparameters
-        # ===============================
-        params = {
-            "n_estimators": 100,
-            "max_depth": None,
-            "min_samples_split": 2,
-            "random_state": 42
-        }
-        mlflow.log_params(params)
+    # ==================================================
+    # 3. Hyperparameter dan Model
+    # ==================================================
+    params = {
+        "n_estimators": 100,
+        "max_depth": None,
+        "min_samples_split": 2,
+        "random_state": 42
+    }
+    for key, val in params.items():
+        mlflow.log_param(key, val)
 
-        # ===============================
-        # 4. Train model
-        # ===============================
-        model = RandomForestClassifier(**params)
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+    model = RandomForestClassifier(**params)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
 
-        # ===============================
-        # 5. Evaluate metrics
-        # ===============================
-        metrics = {
-            "accuracy": accuracy_score(y_test, y_pred),
-            "f1_score": f1_score(y_test, y_pred, average='macro'),
-            "recall": recall_score(y_test, y_pred, average='macro'),
-            "precision": precision_score(y_test, y_pred, average='macro')
-        }
-        mlflow.log_metrics(metrics)
+    # ==================================================
+    # 4. Evaluasi Model
+    # ==================================================
+    metrics = {
+        "accuracy": accuracy_score(y_test, y_pred),
+        "f1_score": f1_score(y_test, y_pred, average="macro"),
+        "recall": recall_score(y_test, y_pred, average="macro"),
+        "precision": precision_score(y_test, y_pred, average="macro")
+    }
+    for key, val in metrics.items():
+        mlflow.log_metric(key, val)
 
-        # ===============================
-        # 6. Confusion Matrix
-        # ===============================
-        cm = confusion_matrix(y_test, y_pred)
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-        plt.title('Confusion Matrix')
-        plt.xlabel("Predicted")
-        plt.ylabel("Actual")
+    # ==================================================
+    # 5. Visualisasi Confusion Matrix
+    # ==================================================
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("Confusion Matrix")
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
 
-        os.makedirs("artifacts", exist_ok=True)
-        cm_path = "artifacts/confusion_matrix.png"
-        plt.savefig(cm_path)
-        plt.close()
-        mlflow.log_artifact(cm_path)
+    os.makedirs("artifacts", exist_ok=True)
+    cm_path = "artifacts/confusion_matrix.png"
+    plt.savefig(cm_path)
+    plt.close()
+    mlflow.log_artifact(cm_path)
 
-        # ===============================
-        # 7. Classification Report
-        # ===============================
-        report = classification_report(y_test, y_pred)
-        report_path = "artifacts/classification_report.txt"
-        with open(report_path, "w") as f:
-            f.write(report)
-        mlflow.log_artifact(report_path)
+    # ==================================================
+    # 6. Classification Report
+    # ==================================================
+    report = classification_report(y_test, y_pred)
+    report_path = "artifacts/classification_report.txt"
+    with open(report_path, "w") as f:
+        f.write(report)
+    mlflow.log_artifact(report_path)
 
-        # ===============================
-        # 8. Save Model
-        # ===============================
-        os.makedirs("output", exist_ok=True)
-        model_path = "output/random_forest_model.pkl"
-        joblib.dump(model, model_path)
+    # ==================================================
+    # 7. Simpan & Log Model
+    # ==================================================
+    os.makedirs("output", exist_ok=True)
+    model_path = "output/random_forest_model.pkl"
+    joblib.dump(model, model_path)
 
-        mlflow.sklearn.log_model(model, artifact_path="model")
+    # log model ke MLflow
+    mlflow.sklearn.log_model(model, artifact_path="model")
 
-        print("\n=== Model Performance Summary ===")
-        for k, v in metrics.items():
-            print(f"{k:<10}: {v:.4f}")
+    # ==================================================
+    # 8. Ringkasan
+    # ==================================================
+    print("\n=== Model Performance Summary ===")
+    for k, v in metrics.items():
+        print(f"{k:<10}: {v:.4f}")
 
-        print("Model training complete. Logged to MLflow.")
+    print("\n✅ Model training selesai dan berhasil dilog ke MLflow.")
+    print(f"Model path (local): {model_path}")
 
 
 if __name__ == "__main__":
