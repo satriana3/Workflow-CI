@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py
+# modelling.py 
 # ======================================================
 
 import argparse
@@ -27,35 +27,43 @@ def main(data_path):
 
     X = df.drop([target_column, "average_score"], axis=1, errors="ignore")
     y = df[target_column]
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
     # ===============================
-    # 2. MLflow setup
+    # 2. Setup MLflow backend
     # ===============================
     if not os.getenv("GITHUB_ACTIONS"):
         mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
     mlflow.set_experiment("Student Performance Workflow CI")
 
-    # ✅ FIX utama: deteksi run aktif DENGAN aman
+    # ===============================
+    # 3. Jalankan training
+    # ===============================
     active_run = mlflow.active_run()
-    if active_run is None:
-        print("ℹ️ Tidak ada active run dari MLflow, memulai run baru (local mode)...")
-        run = mlflow.start_run(run_name="RandomForest_StudentPerformance")
-        print(f"Run baru dimulai: {run.info.run_id}")
-        train_and_log_model(X_train, X_test, y_train, y_test)
-        mlflow.end_run()
+
+    if active_run:
+        print(f"ℹ️ Detected active MLflow run: {active_run.info.run_id}")
+        run_id = active_run.info.run_id
     else:
-        print(f"ℹ️ Detected MLflow active run dari environment CI: {active_run.info.run_id}")
-        train_and_log_model(X_train, X_test, y_train, y_test)
+        print("ℹ️ No active run found, starting new local run...")
+        run = mlflow.start_run(run_name="RandomForest_StudentPerformance")
+        run_id = run.info.run_id
+
+    print(f"📘 Using run ID: {run_id}")
+    train_and_log_model(X_train, X_test, y_train, y_test)
+
+    # End run hanya jika kita yang mulai (local)
+    if not os.getenv("GITHUB_ACTIONS"):
+        mlflow.end_run()
+        print("✅ Local run ended successfully.")
 
 
 def train_and_log_model(X_train, X_test, y_train, y_test):
     # ===============================
-    # 3. Hyperparameters
+    # Train model
     # ===============================
     params = {
         "n_estimators": 100,
@@ -65,16 +73,10 @@ def train_and_log_model(X_train, X_test, y_train, y_test):
     }
     mlflow.log_params(params)
 
-    # ===============================
-    # 4. Train model
-    # ===============================
     model = RandomForestClassifier(**params)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    # ===============================
-    # 5. Metrics
-    # ===============================
     metrics = {
         "accuracy": accuracy_score(y_test, y_pred),
         "f1_score": f1_score(y_test, y_pred, average="macro"),
@@ -83,9 +85,7 @@ def train_and_log_model(X_train, X_test, y_train, y_test):
     }
     mlflow.log_metrics(metrics)
 
-    # ===============================
-    # 6. Confusion Matrix
-    # ===============================
+    # Confusion matrix
     os.makedirs("artifacts", exist_ok=True)
     cm = confusion_matrix(y_test, y_pred)
     plt.figure(figsize=(8, 6))
@@ -98,26 +98,19 @@ def train_and_log_model(X_train, X_test, y_train, y_test):
     plt.close()
     mlflow.log_artifact(cm_path)
 
-    # ===============================
-    # 7. Classification Report
-    # ===============================
+    # Classification report
     report = classification_report(y_test, y_pred)
     report_path = "artifacts/classification_report.txt"
     with open(report_path, "w") as f:
         f.write(report)
     mlflow.log_artifact(report_path)
 
-    # ===============================
-    # 8. Save Model
-    # ===============================
+    # Save model
     os.makedirs("output", exist_ok=True)
     model_path = "output/random_forest_model.pkl"
     joblib.dump(model, model_path)
     mlflow.sklearn.log_model(model, artifact_path="model")
 
-    # ===============================
-    # 9. Output Summary
-    # ===============================
     print("\n=== Model Performance Summary ===")
     for k, v in metrics.items():
         print(f"{k:<10}: {v:.4f}")
