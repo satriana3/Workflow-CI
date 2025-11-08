@@ -1,7 +1,4 @@
-# ======================================================
-# modelling.py (versi fix CI/CD error)
-# ======================================================
-
+# modelling.py (fix untuk GitHub Actions + MLflow)
 import argparse
 import os
 import pandas as pd
@@ -40,13 +37,8 @@ def main(data_path):
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("Student Performance Workflow CI")
 
-    # ✅ Gunakan run aktif yang sudah dibuat otomatis oleh `mlflow run`
-    active_run = mlflow.active_run()
-    if active_run:
-        print(f"Using existing run: {active_run.info.run_id}")
-    else:
-        print("No active run found — starting a new run.")
-        active_run = mlflow.start_run(run_name="StudentPerformance_CI")
+    # ⚠️ Jangan buat run baru, gunakan run yang otomatis dibuat oleh mlflow run
+    print("ℹ️ Logging directly to existing MLflow run (created by mlflow run)")
 
     # ===============================
     # 3. Hyperparameters
@@ -114,10 +106,6 @@ def main(data_path):
         print(f"{k:<10}: {v:.4f}")
 
     print("✅ Model training complete. Logged to MLflow.")
-
-    # Tutup run hanya jika kita yang membukanya di sini
-    if not mlflow.active_run():
-        mlflow.end_run()
 
 
 if __name__ == "__main__":
