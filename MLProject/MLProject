@@ -1,7 +1,7 @@
-name: "student-performance-project"
+name: "StudentPerformance"
 
 entry_points:
   main:
     parameters:
-      data_path: {type: str, default: "studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv"}
+      data_path: {type: str}
     command: "python modelling.py --data_path {data_path}"
