@@ -8,6 +8,8 @@ import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import mlflow
+import mlflow.sklearn
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -15,9 +17,6 @@ from sklearn.metrics import (
     accuracy_score, f1_score, recall_score, precision_score,
     confusion_matrix, classification_report
 )
-
-import mlflow
-import mlflow.sklearn
 
 
 def main(data_path):
@@ -29,27 +28,29 @@ def main(data_path):
 
     X = df.drop([target_column, 'average_score'], axis=1, errors='ignore')
     y = df[target_column]
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
     # ===============================
-    # 2. MLflow setup
+    # 2. Setup MLflow Tracking
     # ===============================
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    # Jangan ubah tracking URI kalau dijalankan lewat mlflow run (CI)
+    if not os.getenv("GITHUB_ACTIONS"):
+        mlflow.set_tracking_uri("sqlite:///mlflow.db")
+
     mlflow.set_experiment("Student Performance Workflow CI")
 
-    # Deteksi apakah sudah ada run aktif (misal dari `mlflow run`)
+    # Cek apakah sudah ada run aktif
     active_run = mlflow.active_run()
 
-    if active_run is None:
-        # Jika tidak ada run aktif → buat baru (agar bisa jalan manual juga)
+    if active_run:
+        print(f"ℹ️ Using existing run ID: {active_run.info.run_id}")
+        run_training(X_train, X_test, y_train, y_test)
+    else:
+        print("ℹ️ No active run found, starting a new MLflow run...")
         with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
             run_training(X_train, X_test, y_train, y_test)
-    else:
-        # Jika sudah ada run aktif (misal dijalankan lewat CI)
-        run_training(X_train, X_test, y_train, y_test)
 
 
 def run_training(X_train, X_test, y_train, y_test):
@@ -72,13 +73,13 @@ def run_training(X_train, X_test, y_train, y_test):
     y_pred = model.predict(X_test)
 
     # ===============================
-    # 5. Evaluate metrics
+    # 5. Metrics
     # ===============================
     metrics = {
         "accuracy": accuracy_score(y_test, y_pred),
-        "f1_score": f1_score(y_test, y_pred, average='macro'),
-        "recall": recall_score(y_test, y_pred, average='macro'),
-        "precision": precision_score(y_test, y_pred, average='macro')
+        "f1_score": f1_score(y_test, y_pred, average="macro"),
+        "recall": recall_score(y_test, y_pred, average="macro"),
+        "precision": precision_score(y_test, y_pred, average="macro"),
     }
     mlflow.log_metrics(metrics)
 
@@ -88,8 +89,8 @@ def run_training(X_train, X_test, y_train, y_test):
     os.makedirs("artifacts", exist_ok=True)
     cm = confusion_matrix(y_test, y_pred)
     plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title('Confusion Matrix')
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("Confusion Matrix")
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
     cm_path = "artifacts/confusion_matrix.png"
@@ -107,17 +108,19 @@ def run_training(X_train, X_test, y_train, y_test):
     mlflow.log_artifact(report_path)
 
     # ===============================
-    # 8. Save Model
+    # 8. Save model
     # ===============================
     os.makedirs("output", exist_ok=True)
     model_path = "output/random_forest_model.pkl"
     joblib.dump(model, model_path)
     mlflow.sklearn.log_model(model, artifact_path="model")
 
+    # ===============================
+    # 9. Output Summary
+    # ===============================
     print("\n=== Model Performance Summary ===")
     for k, v in metrics.items():
         print(f"{k:<10}: {v:.4f}")
-
     print("✅ Model training complete. Logged to MLflow.")
 
 
