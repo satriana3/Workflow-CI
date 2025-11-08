@@ -1,4 +1,7 @@
-# modelling.py (fix untuk GitHub Actions + MLflow)
+# ======================================================
+# modelling.py
+# ======================================================
+
 import argparse
 import os
 import pandas as pd
@@ -37,9 +40,19 @@ def main(data_path):
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("Student Performance Workflow CI")
 
-    # ⚠️ Jangan buat run baru, gunakan run yang otomatis dibuat oleh mlflow run
-    print("ℹ️ Logging directly to existing MLflow run (created by mlflow run)")
+    # Deteksi apakah sudah ada run aktif (misal dari `mlflow run`)
+    active_run = mlflow.active_run()
 
+    if active_run is None:
+        # Jika tidak ada run aktif → buat baru (agar bisa jalan manual juga)
+        with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
+            run_training(X_train, X_test, y_train, y_test)
+    else:
+        # Jika sudah ada run aktif (misal dijalankan lewat CI)
+        run_training(X_train, X_test, y_train, y_test)
+
+
+def run_training(X_train, X_test, y_train, y_test):
     # ===============================
     # 3. Hyperparameters
     # ===============================
