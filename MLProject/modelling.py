@@ -13,7 +13,7 @@ def main(data_path):
     print(f"📂 Loading dataset from: {data_path}")
     df = pd.read_csv(data_path)
 
-    # --- Simple preprocessing (contoh aman) ---
+    #preprocessing
     if "math score" not in df.columns:
         raise ValueError("Kolom 'math score' tidak ditemukan di dataset.")
 
@@ -32,7 +32,7 @@ def main(data_path):
 
     print(f"📘 MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
-    # --- Gunakan autolog agar tidak perlu start_run() manual ---
+    # Menggunakan autolog agar tidak perlu start_run() manual ---
     mlflow.autolog()
 
     print("🚀 Training model RandomForestClassifier...")
@@ -49,6 +49,13 @@ def main(data_path):
 
     print("📦 Model logged successfully to MLflow artifacts.")
 
+    # Memastikan folder output model ada untuk CI
+    if os.path.exists("mlruns"):
+        os.makedirs("model", exist_ok=True)
+        shutil.copytree("mlruns", "model/mlruns", dirs_exist_ok=True)
+        print("✅ Folder mlruns disalin ke model/mlruns agar CI dapat menemukannya.")
+    else:
+        print("⚠️ Folder mlruns tidak ditemukan, pastikan MLflow berjalan dengan benar.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -58,10 +65,3 @@ if __name__ == "__main__":
     print("⚙️ Running modelling.py ...")
     main(args.data_path)
 
-# Pastikan folder output model ada untuk CI
-if os.path.exists("mlruns"):
-    os.makedirs("model", exist_ok=True)
-    shutil.copytree("mlruns", "model/mlruns", dirs_exist_ok=True)
-    print("✅ Folder mlruns disalin ke model/mlruns agar CI dapat menemukannya.")
-else:
-    print("⚠️ Folder mlruns tidak ditemukan, pastikan MLflow berjalan dengan benar.")
