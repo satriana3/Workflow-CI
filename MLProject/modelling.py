@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py (FINAL FIX for CI Workflow)
+# modelling.py 
 # ======================================================
 
 import argparse
@@ -22,27 +22,33 @@ def main(data_path):
     # ===============================
     # 1. Load dataset
     # ===============================
+    print(f"📂 Loading dataset from: {data_path}")
     df = pd.read_csv(data_path)
     target_column = "average_score_binned"
 
     X = df.drop([target_column, "average_score"], axis=1, errors="ignore")
     y = df[target_column]
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
     # ===============================
-    # 2. Setup MLflow backend
+    # 2. Setup MLflow Tracking
     # ===============================
-    # Hanya aktifkan tracking URI lokal jika dijalankan manual, bukan dari GitHub Actions
     if not os.getenv("GITHUB_ACTIONS"):
-        mlflow.set_tracking_uri("sqlite:///mlflow.db")
+        mlflow.set_tracking_uri("sqlite:///mlflow.db")  # lokal
+    else:
+        # Saat di GitHub Actions, pakai default file system mlruns/
+        print("⚙️ Running inside GitHub Actions (default tracking)")
 
-    # Jangan set_experiment() — biarkan MLflow run dari environment luar
+    # Set experiment agar semua run tersimpan di lokasi mlruns/
+    mlflow.set_experiment("Student Performance Workflow CI")
+
     print("📘 MLflow tracking URI:", mlflow.get_tracking_uri())
 
     # ===============================
-    # 3. Handle run environment (safe)
+    # 3. Jalankan Training
     # ===============================
     active_run = mlflow.active_run()
 
@@ -50,11 +56,11 @@ def main(data_path):
         print(f"ℹ️ Using existing MLflow run: {active_run.info.run_id}")
         train_and_log_model(X_train, X_test, y_train, y_test)
     else:
-        print("ℹ️ No active run detected — starting new local run...")
+        print("ℹ️ No active MLflow run detected — starting a new one...")
         with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
             train_and_log_model(X_train, X_test, y_train, y_test)
 
-    print("✅ Training complete.")
+    print("✅ Training process finished successfully.")
 
 
 def train_and_log_model(X_train, X_test, y_train, y_test):
@@ -73,6 +79,9 @@ def train_and_log_model(X_train, X_test, y_train, y_test):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
+    # ===============================
+    # Evaluate model
+    # ===============================
     metrics = {
         "accuracy": accuracy_score(y_test, y_pred),
         "f1_score": f1_score(y_test, y_pred, average="macro"),
@@ -81,8 +90,16 @@ def train_and_log_model(X_train, X_test, y_train, y_test):
     }
     mlflow.log_metrics(metrics)
 
-    # Confusion matrix
+    print("\n=== Model Performance Summary ===")
+    for k, v in metrics.items():
+        print(f"{k:<10}: {v:.4f}")
+
+    # ===============================
+    # Save artifacts (confusion matrix + report)
+    # ===============================
     os.makedirs("artifacts", exist_ok=True)
+
+    # Confusion Matrix
     cm = confusion_matrix(y_test, y_pred)
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
@@ -94,23 +111,22 @@ def train_and_log_model(X_train, X_test, y_train, y_test):
     plt.close()
     mlflow.log_artifact(cm_path)
 
-    # Classification report
+    # Classification Report
     report = classification_report(y_test, y_pred)
     report_path = "artifacts/classification_report.txt"
     with open(report_path, "w") as f:
         f.write(report)
     mlflow.log_artifact(report_path)
 
-    # Save model
+    # ===============================
+    # Save & Log Model
+    # ===============================
     os.makedirs("output", exist_ok=True)
     model_path = "output/random_forest_model.pkl"
     joblib.dump(model, model_path)
     mlflow.sklearn.log_model(model, artifact_path="model")
 
-    print("\n=== Model Performance Summary ===")
-    for k, v in metrics.items():
-        print(f"{k:<10}: {v:.4f}")
-    print("✅ Model training complete. Logged to MLflow.")
+    print("✅ Model training complete and logged to MLflow.")
 
 
 if __name__ == "__main__":
