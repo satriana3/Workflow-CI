@@ -52,15 +52,14 @@ def main(data_path):
     # ===============================
     active_run = mlflow.active_run()
 
-    if active_run:
-        print(f"ℹ️ Using existing MLflow run: {active_run.info.run_id}")
-        train_and_log_model(X_train, X_test, y_train, y_test)
-    else:
+    if active_run is None:
         print("ℹ️ No active MLflow run detected — starting a new one...")
         with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
             train_and_log_model(X_train, X_test, y_train, y_test)
+    else:
+        print(f"ℹ️ Detected existing MLflow run ({active_run.info.run_id}), using it.")
+        train_and_log_model(X_train, X_test, y_train, y_test)
 
-    print("✅ Training process finished successfully.")
 
 
 def train_and_log_model(X_train, X_test, y_train, y_test):
