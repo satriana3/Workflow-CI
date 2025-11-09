@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py
+# modelling.py (FINAL FIX for CI Workflow)
 # ======================================================
 
 import argparse
@@ -34,23 +34,25 @@ def main(data_path):
     # ===============================
     # 2. Setup MLflow backend
     # ===============================
+    # Hanya aktifkan tracking URI lokal jika dijalankan manual, bukan dari GitHub Actions
     if not os.getenv("GITHUB_ACTIONS"):
         mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
-    mlflow.set_experiment("Student Performance Workflow CI")
+    # Jangan set_experiment() — biarkan MLflow run dari environment luar
+    print("📘 MLflow tracking URI:", mlflow.get_tracking_uri())
 
     # ===============================
-    # 3. Start MLflow run (safe mode)
+    # 3. Handle run environment (safe)
     # ===============================
     active_run = mlflow.active_run()
 
-    if active_run is None:
-        print("ℹ️ No active MLflow run detected — starting a new run...")
-        with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
-            train_and_log_model(X_train, X_test, y_train, y_test)
-    else:
+    if active_run:
         print(f"ℹ️ Using existing MLflow run: {active_run.info.run_id}")
         train_and_log_model(X_train, X_test, y_train, y_test)
+    else:
+        print("ℹ️ No active run detected — starting new local run...")
+        with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
+            train_and_log_model(X_train, X_test, y_train, y_test)
 
     print("✅ Training complete.")
 
