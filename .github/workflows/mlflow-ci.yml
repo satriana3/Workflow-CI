@@ -36,10 +36,12 @@ jobs:
           echo "Latest run ID: $RUN_ID"
           echo "Artifacts stored at mlruns/0/$RUN_ID"
 
-      - name: Login to Docker Hub
-        env:
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: echo "${DOCKERHUB_TOKEN}" | docker login -u "satriana3" --password-stdin
+        - name: Login to Docker Hub
+          env:
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          run: |
+            echo "$DOCKERHUB_TOKEN" | docker login -u satriana3 --password-stdin
+
 
       - name: Build and Push Docker image
         working-directory: MLProject
