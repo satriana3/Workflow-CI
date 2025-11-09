@@ -48,13 +48,15 @@ jobs:
         run: |
           set -e
           RUN_ID=$(ls -t mlruns/0 | head -n 1)
-          MODEL_PATH="model/mlruns/0/$RUN_ID/artifacts/model"
+          MODEL_PATH="mlruns/0/$RUN_ID/artifacts/model"
           
           if [ ! -d "$MODEL_PATH" ]; then
             echo "❌ Model folder tidak ditemukan!"
+            echo "Isi folder mlruns/0:"
+            ls -R mlruns/0 || true
             exit 1
           fi
-
+      
           echo "✅ Model ditemukan di: $MODEL_PATH"
           mlflow models build-docker -m "$MODEL_PATH" -n student-performance-mlflow
           docker tag student-performance-mlflow satriana3/student-performance-mlflow:latest
