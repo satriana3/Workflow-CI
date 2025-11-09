@@ -1,5 +1,5 @@
 # ======================================================
-# modelling.py 
+# modelling.py
 # ======================================================
 
 import argparse
@@ -40,25 +40,19 @@ def main(data_path):
     mlflow.set_experiment("Student Performance Workflow CI")
 
     # ===============================
-    # 3. Jalankan training
+    # 3. Start MLflow run (safe mode)
     # ===============================
     active_run = mlflow.active_run()
 
-    if active_run:
-        print(f"ℹ️ Detected active MLflow run: {active_run.info.run_id}")
-        run_id = active_run.info.run_id
+    if active_run is None:
+        print("ℹ️ No active MLflow run detected — starting a new run...")
+        with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
+            train_and_log_model(X_train, X_test, y_train, y_test)
     else:
-        print("ℹ️ No active run found, starting new local run...")
-        run = mlflow.start_run(run_name="RandomForest_StudentPerformance")
-        run_id = run.info.run_id
+        print(f"ℹ️ Using existing MLflow run: {active_run.info.run_id}")
+        train_and_log_model(X_train, X_test, y_train, y_test)
 
-    print(f"📘 Using run ID: {run_id}")
-    train_and_log_model(X_train, X_test, y_train, y_test)
-
-    # End run hanya jika kita yang mulai (local)
-    if not os.getenv("GITHUB_ACTIONS"):
-        mlflow.end_run()
-        print("✅ Local run ended successfully.")
+    print("✅ Training complete.")
 
 
 def train_and_log_model(X_train, X_test, y_train, y_test):
