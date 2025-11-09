@@ -33,9 +33,8 @@ jobs:
       - name: Show latest run info
         working-directory: MLProject
         run: |
-          RUN_ID=$(ls -t mlruns/0 | head -n 1)
-          echo "Latest run ID: $RUN_ID"
-          echo "Artifacts stored at mlruns/0/$RUN_ID"
+          echo "Isi folder mlruns:"
+          ls -R mlruns || echo "Folder mlruns belum ada"
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -48,15 +47,16 @@ jobs:
         run: |
           set -e
           RUN_ID=$(ls -t mlruns/0 | head -n 1)
-          MODEL_PATH="mlruns/0/$RUN_ID/artifacts/model"
+          MODEL_PATH="model/mlruns/0/$RUN_ID/artifacts/model"
           
+          echo "🔍 Mencari model di: $MODEL_PATH"
           if [ ! -d "$MODEL_PATH" ]; then
             echo "❌ Model folder tidak ditemukan!"
-            echo "Isi folder mlruns/0:"
-            ls -R mlruns/0 || true
+            echo "Isi folder model/mlruns/0:"
+            ls -R model/mlruns/0 || echo "(kosong)"
             exit 1
           fi
-      
+
           echo "✅ Model ditemukan di: $MODEL_PATH"
           mlflow models build-docker -m "$MODEL_PATH" -n student-performance-mlflow
           docker tag student-performance-mlflow satriana3/student-performance-mlflow:latest
