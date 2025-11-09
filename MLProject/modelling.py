@@ -50,10 +50,13 @@ def main(data_path):
     print("📦 Model logged successfully to MLflow artifacts.")
 
     # Memastikan folder output model ada untuk CI
-    if os.path.exists("mlruns"):
+    mlruns_dir = "mlruns"
+    output_dir = "model/mlruns"
+    if os.path.exists(mlruns_dir):
         os.makedirs("model", exist_ok=True)
-        shutil.copytree("mlruns", "model/mlruns", dirs_exist_ok=True)
-        print("✅ Folder mlruns disalin ke model/mlruns agar CI dapat menemukannya.")
+        shutil.copytree(mlruns_dir, output_dir, dirs_exist_ok=True)
+        print(f"✅ Folder {mlruns_dir} disalin ke {output_dir} agar CI dapat menemukannya.")
+        print(f"📁 Isi direktori model/: {os.listdir('model')}")
     else:
         print("⚠️ Folder mlruns tidak ditemukan, pastikan MLflow berjalan dengan benar.")
 
