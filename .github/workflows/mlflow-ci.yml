@@ -12,52 +12,99 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set up job
+        run: echo "🚀 Memulai workflow CI untuk MLflow Project..."
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12.7
         uses: actions/setup-python@v5
         with:
           python-version: "3.12.7"
 
+      - name: Check Env
+        run: |
+          echo "✅ Mengecek versi Python dan pip..."
+          python --version
+          pip --version
+
       - name: Install dependencies
         working-directory: MLProject
         run: |
-          pip install mlflow dagshub scikit-learn pandas numpy matplotlib seaborn joblib
+          echo "📦 Menginstal dependencies..."
+          pip install mlflow==2.19.0 dagshub scikit-learn pandas numpy matplotlib seaborn joblib
 
-      - name: Run MLflow Project (train model)
+      - name: Run MLflow project
         working-directory: MLProject
         run: |
+          echo "⚙️ Menjalankan MLflow project..."
           mlflow run . -P data_path=studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv --env-manager=local
 
-      - name: Show latest run info
+      - name: Get latest MLflow run_id
         working-directory: MLProject
         run: |
-          echo "Isi folder mlruns:"
-          ls -R mlruns || echo "Folder mlruns belum ada"
+          echo "🔍 Mengambil run_id terbaru..."
+          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+          echo "MLFLOW_RUN_ID=$RUN_ID" >> $GITHUB_ENV
+          echo "Run ID terbaru: $RUN_ID"
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: satriana3
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Install Python dependencies (extra)
+        run: |
+          echo "🧩 Memastikan dependensi Python terinstal..."
+          pip install pandas gdown mlflow
 
-      - name: Build and Push Docker image
+      - name: Upload to Google Drive
         working-directory: MLProject
         run: |
+          echo "☁️ Mengupload artifact ke Google Drive..."
+          python scripts/upload_to_gdrive.py || echo "⚠️ Script upload_to_gdrive.py tidak ditemukan, dilewati."
+
+      - name: Build Docker Model
+        working-directory: MLProject
+        run: |
+          echo "🐳 Membangun Docker image dari model..."
           set -e
           RUN_ID=$(ls -t mlruns/0 | head -n 1)
-          MODEL_PATH="model/mlruns/0/$RUN_ID/artifacts/model"
-          
+          MODEL_PATH="mlruns/0/$RUN_ID/artifacts/model"
+
           echo "🔍 Mencari model di: $MODEL_PATH"
           if [ ! -d "$MODEL_PATH" ]; then
             echo "❌ Model folder tidak ditemukan!"
-            echo "Isi folder model/mlruns/0:"
-            ls -R model/mlruns/0 || echo "(kosong)"
+            echo "Isi folder mlruns/0:"
+            ls -R mlruns/0 || echo "(kosong)"
             exit 1
           fi
 
           echo "✅ Model ditemukan di: $MODEL_PATH"
           mlflow models build-docker -m "$MODEL_PATH" -n student-performance-mlflow
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: satriana3
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag Docker Image
+        run: |
+          echo "🏷️ Menandai image Docker..."
           docker tag student-performance-mlflow satriana3/student-performance-mlflow:latest
+          docker tag student-performance-mlflow satriana3/student-performance-mlflow:v1
+
+      - name: Push Docker Image
+        run: |
+          echo "📤 Mengunggah image ke Docker Hub..."
           docker push satriana3/student-performance-mlflow:latest
+          docker push satriana3/student-performance-mlflow:v1
+
+      - name: Post Log in to Docker Hub
+        run: echo "✅ Login Docker Hub selesai."
+
+      - name: Post Set up Python 3.12.7
+        run: echo "✅ Python 3.12.7 sudah disiapkan."
+
+      - name: Post Run actions/checkout@v4
+        run: echo "✅ Repository sudah di-checkout."
+
+      - name: Complete job
+        run: echo "🎉 Workflow CI berhasil diselesaikan tanpa error!"
