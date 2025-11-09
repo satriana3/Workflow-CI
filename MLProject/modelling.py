@@ -12,12 +12,17 @@ def main(data_path):
     print(f"📂 Loading dataset from: {data_path}")
     df = pd.read_csv(data_path)
 
-    # --- Simple preprocessing ---
+    # --- Simple preprocessing (contoh aman) ---
+    if "math score" not in df.columns:
+        raise ValueError("Kolom 'math score' tidak ditemukan di dataset.")
+
     X = df.select_dtypes(include=["number"]).dropna(axis=1)
     y = (df["math score"] > df["math score"].mean()).astype(int)
     X = X.drop(columns=["math score"], errors="ignore")
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     # --- MLflow setup ---
     tracking_dir = os.path.abspath("mlruns")
@@ -26,30 +31,22 @@ def main(data_path):
 
     print(f"📘 MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
-    # --- Cek apakah sudah ada run aktif (dari `mlflow run`) ---
-    active_run = mlflow.active_run()
+    # --- Gunakan autolog agar tidak perlu start_run() manual ---
+    mlflow.autolog()
 
-    if active_run:
-        print(f"ℹ️ Detected active run: {active_run.info.run_id}")
-    else:
-        print("ℹ️ No active run detected — starting new one")
-        mlflow.start_run(run_name="RandomForest_StudentPerformance")
+    print("🚀 Training model RandomForestClassifier...")
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
 
-    # --- Model training ---
-    rf = RandomForestClassifier(n_estimators=100, random_state=42)
-    rf.fit(X_train, y_train)
-    preds = rf.predict(X_test)
     acc = accuracy_score(y_test, preds)
-
     print(f"✅ Model trained successfully — Accuracy: {acc:.4f}")
 
-    # --- Log ke MLflow ---
-    mlflow.log_metric("accuracy", acc)
-    mlflow.sklearn.log_model(rf, "model")
+    # --- Log manual metric tambahan (tanpa start_run) ---
+    mlflow.log_metric("accuracy_manual", acc)
+    mlflow.sklearn.log_model(model, "model")
 
-    # --- Tutup run hanya jika kita yang buka ---
-    if not active_run:
-        mlflow.end_run()
+    print("📦 Model logged successfully to MLflow artifacts.")
 
 
 if __name__ == "__main__":
