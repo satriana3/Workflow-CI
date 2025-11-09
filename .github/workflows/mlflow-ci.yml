@@ -48,7 +48,7 @@ jobs:
         run: |
           set -e
           RUN_ID=$(ls -t mlruns/0 | head -n 1)
-          MODEL_PATH="mlruns/0/$RUN_ID/artifacts/model"
+          MODEL_PATH="model/mlruns/0/$RUN_ID/artifacts/model"
           
           if [ ! -d "$MODEL_PATH" ]; then
             echo "❌ Model folder tidak ditemukan!"
