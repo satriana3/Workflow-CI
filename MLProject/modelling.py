@@ -1,4 +1,5 @@
 import os
+import shutil
 import argparse
 import mlflow
 import mlflow.sklearn
@@ -56,3 +57,11 @@ if __name__ == "__main__":
 
     print("⚙️ Running modelling.py ...")
     main(args.data_path)
+
+# Pastikan folder output model ada untuk CI
+if os.path.exists("mlruns"):
+    os.makedirs("model", exist_ok=True)
+    shutil.copytree("mlruns", "model/mlruns", dirs_exist_ok=True)
+    print("✅ Folder mlruns disalin ke model/mlruns agar CI dapat menemukannya.")
+else:
+    print("⚠️ Folder mlruns tidak ditemukan, pastikan MLflow berjalan dengan benar.")
