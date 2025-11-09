@@ -36,36 +36,41 @@ def main(data_path):
     print(f"📂 Loading dataset from: {data_path}")
     df = pd.read_csv(data_path)
 
-    # contoh sederhana: gunakan semua kolom numerik
-    X = df.select_dtypes(include=[np.number]).dropna(axis=1)
-    if "math score" in X.columns:
-        y = (df["math score"] > df["math score"].mean()).astype(int)
-        X = X.drop(columns=["math score"], errors="ignore")
-    else:
-        # fallback: jika kolom lain dipakai
-        y = df.iloc[:, -1]
+    X = df.select_dtypes(include=["number"]).dropna(axis=1)
+    y = (df["math score"] > df["math score"].mean()).astype(int)
+    X = X.drop(columns=["math score"], errors="ignore")
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # pastikan tracking URI lokal
     mlflow.set_tracking_uri("file://" + os.path.abspath("mlruns"))
     mlflow.set_experiment("Student Performance Workflow CI")
 
     print(f"📘 MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
-    # jika sudah ada run aktif, gunakan itu
-    if mlflow.active_run() is not None:
-        print(f"ℹ️ Detected active MLflow run: {mlflow.active_run().info.run_id}")
-        train_and_log_model(X_train, X_test, y_train, y_test)
+    # ⛔ FIX BAGIAN INI
+    if os.getenv("MLFLOW_RUN_ID"):
+        print(f"ℹ️ Running inside mlflow run with existing ID: {os.getenv('MLFLOW_RUN_ID')}")
+        mlflow.start_run(run_id=os.getenv("MLFLOW_RUN_ID"))
+    elif mlflow.active_run():
+        print(f"ℹ️ Using existing active run: {mlflow.active_run().info.run_id}")
     else:
-        print("ℹ️ No active run detected — starting new MLflow run")
-        with mlflow.start_run(run_name="RandomForest_StudentPerformance"):
-            train_and_log_model(X_train, X_test, y_train, y_test)
+        print("ℹ️ No active run detected — starting a new one")
+        mlflow.start_run(run_name="RandomForest_StudentPerformance")
 
+    # Training
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf.fit(X_train, y_train)
+    preds = rf.predict(X_test)
+    acc = accuracy_score(y_test, preds)
+    print(f"✅ Accuracy: {acc:.4f}")
+
+    mlflow.log_metric("accuracy", acc)
+    mlflow.sklearn.log_model(rf, "model")
+
+    mlflow.end_run()
 
 if __name__ == "__main__":
+    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, required=True)
     args = parser.parse_args()
