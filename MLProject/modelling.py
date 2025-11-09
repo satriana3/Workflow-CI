@@ -36,38 +36,44 @@ def main(data_path):
     print(f"📂 Loading dataset from: {data_path}")
     df = pd.read_csv(data_path)
 
+    # Preprocessing sederhana
     X = df.select_dtypes(include=["number"]).dropna(axis=1)
     y = (df["math score"] > df["math score"].mean()).astype(int)
     X = X.drop(columns=["math score"], errors="ignore")
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+    # Setup MLflow
     mlflow.set_tracking_uri("file://" + os.path.abspath("mlruns"))
     mlflow.set_experiment("Student Performance Workflow CI")
 
     print(f"📘 MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
-    # ⛔ FIX BAGIAN INI
+    # FIX UTAMA – Gunakan run aktif jika sudah ada
     if os.getenv("MLFLOW_RUN_ID"):
-        print(f"ℹ️ Running inside mlflow run with existing ID: {os.getenv('MLFLOW_RUN_ID')}")
-        mlflow.start_run(run_id=os.getenv("MLFLOW_RUN_ID"))
+        run_id = os.getenv("MLFLOW_RUN_ID")
+        print(f"ℹ️ Running inside mlflow run with existing ID: {run_id}")
+        mlflow.start_run(run_id=run_id)
     elif mlflow.active_run():
         print(f"ℹ️ Using existing active run: {mlflow.active_run().info.run_id}")
     else:
         print("ℹ️ No active run detected — starting a new one")
         mlflow.start_run(run_name="RandomForest_StudentPerformance")
 
-    # Training
+    # Training model
     rf = RandomForestClassifier(n_estimators=100, random_state=42)
     rf.fit(X_train, y_train)
     preds = rf.predict(X_test)
     acc = accuracy_score(y_test, preds)
-    print(f"✅ Accuracy: {acc:.4f}")
 
+    print(f"✅ Model trained successfully — Accuracy: {acc:.4f}")
+
+    # Logging metrics & model
     mlflow.log_metric("accuracy", acc)
     mlflow.sklearn.log_model(rf, "model")
 
     mlflow.end_run()
+
 
 if __name__ == "__main__":
     import argparse
