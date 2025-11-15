@@ -12,7 +12,7 @@ jobs:
     steps:
 
     # Checkout repo
-    - name: Run actions/checkout@v3
+    - name: Checkout repository
       uses: actions/checkout@v3
 
     # Setup Python
@@ -21,54 +21,48 @@ jobs:
       with:
         python-version: "3.12.7"
 
-    # Check ENV
-    - name: Check Env
-      run: |
-        python --version
-        pip --version
-        ls -R .
-
-    # Install Python dependencies for MLflow CLI run
-    - name: Install dependencies
-      run: |
-        pip install --upgrade pip
-        pip install setuptools wheel
-        pip install mlflow==2.12.0 scikit-learn pandas numpy google-auth google-auth-oauthlib google-auth-httplib2 pydrive
-
-    # Run MLProject using MLflow
-    - name: Run mlflow project
-      run: |
-        conda run -n student_performance_env mlflow run MLProject/ \
-        --no-conda \
-        -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
-
-
-    # GET latest MLflow run_id
-    - name: Get latest MLflow run_id
-      id: get_runid
-      run: |
-        run_id=$(ls mlruns/0 | grep -v meta.yaml | sort | tail -n 1)
-        echo "run_id=$run_id" >> $GITHUB_ENV
-        echo "Latest run_id: $run_id"
-
-    # Install Python deps again inside runner for uploading to Drive
+    # Install dependencies (pip only)
     - name: Install Python dependencies
       run: |
-        pip install pydrive google-auth google-auth-oauthlib google-auth-httplib2
+        pip install --upgrade pip
+        pip install mlflow==2.12.0 \
+          scikit-learn pandas numpy \
+          google-auth google-auth-oauthlib google-auth-httplib2 \
+          wheel setuptools
 
-    # Upload artifacts (mlruns folder) to Google Drive
-    - name: Upload to Google Drive
-      env:
-        GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
-        GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
-        GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+    # Run MLflow project (no conda)
+    - name: Run MLflow Project
       run: |
-        python MLProject/upload_to_drive.py mlruns
+        mlflow run MLProject/ \
+          --no-conda \
+          -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-    # Build docker model using mlflow
-    - name: Build Docker Model
+    # Get experiment id & run id
+    - name: Get MLflow Run Information
+      id: get_ids
       run: |
-        mlflow models build-docker -m "mlruns/0/${run_id}/artifacts/model" -n student_performance_model
+        EXP_ID=$(ls mlruns | head -n 1)
+        RUN_ID=$(ls mlruns/$EXP_ID | grep -v meta.yaml | sort | tail -n 1)
+
+        echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
+        echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+        echo "Experiment ID: $EXP_ID"
+        echo "Run ID: $RUN_ID"
+
+    # Upload artifacts
+    - name: Upload MLflow Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlflow-artifacts
+        path: mlruns/
+
+    # Build Docker image using MLflow
+    - name: Build Docker Image
+      run: |
+        mlflow models build-docker \
+          -m "mlruns/${EXP_ID}/${RUN_ID}/artifacts/model" \
+          -n student_performance_model
 
     # Login to Docker Hub
     - name: Log in to Docker Hub
@@ -81,9 +75,9 @@ jobs:
     - name: Tag Docker Image
       run: |
         docker tag student_performance_model:latest \
-        ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
+          ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
 
-    # Push docker to hub
+    # Push docker image
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
