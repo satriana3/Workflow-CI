@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
     # Checkout repo
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -21,7 +20,7 @@ jobs:
       with:
         python-version: "3.12.7"
 
-    # Install dependencies (pip only)
+    # Install dependencies
     - name: Install Python dependencies
       run: |
         pip install --upgrade pip
@@ -30,20 +29,21 @@ jobs:
           google-auth google-auth-oauthlib google-auth-httplib2 \
           wheel setuptools
 
-    # Run MLflow Project (force no-conda)
+    # Run MLflow project (Force NO CONDA)
     - name: Run MLflow Project
       env:
         MLFLOW_CONDA_DISABLED: "true"
       run: |
         mlflow run MLProject/ \
+          --env-manager=local \
+          --no-conda \
           -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-
-    # Get experiment id & run id
+    # Get experiment id & run id safely
     - name: Get MLflow Run Information
       id: get_ids
       run: |
-        EXP_ID=$(ls mlruns | head -n 1)
+        EXP_ID=$(ls mlruns | grep -v .txt | head -n 1)
         RUN_ID=$(ls mlruns/$EXP_ID | grep -v meta.yaml | sort | tail -n 1)
 
         echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
@@ -59,7 +59,7 @@ jobs:
         name: mlflow-artifacts
         path: mlruns/
 
-    # Build Docker image using MLflow
+    # Build Docker image from MLflow model
     - name: Build Docker Image
       run: |
         mlflow models build-docker \
@@ -73,13 +73,13 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Tag docker
+    # Tag Docker image
     - name: Tag Docker Image
       run: |
         docker tag student_performance_model:latest \
           ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
 
-    # Push docker image
+    # Push Docker image
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
