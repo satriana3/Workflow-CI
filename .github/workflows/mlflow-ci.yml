@@ -8,78 +8,94 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      # lokasi mlruns di workspace (absolute) nanti dipakai oleh modelling.py via --tracking_uri
+      MLRUNS_PATH: ${{ github.workspace }}/mlruns
 
     steps:
-      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Python 3.12.7
       - name: Set up Python 3.12.7
         uses: actions/setup-python@v5
         with:
           python-version: '3.12.7'
 
-      # 3. Check Python environment
       - name: Check Python Environment
         run: |
           python --version
           pip --version
 
-      # 4. Set up Conda from conda.yaml
       - name: Set up Conda Environment
         uses: conda-incubator/setup-miniconda@v2
         with:
           environment-file: MLProject/conda.yaml
           activate-environment: student_performance_env
           auto-activate-base: false
+          python-version: 3.12
 
-      # 5. Run MLflow project
-      - name: Run MLflow project
+      - name: Run MLflow project (creates mlruns in $GITHUB_WORKSPACE/mlruns)
         run: |
+          # Ensure mlruns directory exists in workspace
+          mkdir -p "$MLRUNS_PATH"
+          # Run MLproject; pass tracking_uri to force mlruns to workspace so artifacts are accessible to later steps
           conda run -n student_performance_env mlflow run MLProject/ \
-            -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
+            -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv \
+            -P tracking_uri="file://$MLRUNS_PATH" \
+            -P experiment_name="student_performance_experiment"
 
-      # 6. Get latest MLflow RUN_ID from correct experiment
-      - name: Get latest MLflow run_id
+      - name: Get EXP_ID and RUN_ID
+        id: get_ids
         run: |
-          EXP_ID=$(conda run -n student_performance_env mlflow experiments list | awk '/student_performance_experiment/ {print $1}')
-          echo "Using EXP_ID=$EXP_ID"
-          
-          RUN_ID=$(conda run -n student_performance_env mlflow runs list \
-                      --experiment-id $EXP_ID \
-                      --order-by start_time desc \
-                      --max-results 1 | awk 'NR==2 {print $1}')
-          
-          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-          echo "Using RUN_ID=$RUN_ID"
+          # Find experiment id for our known experiment name
+          EXP_ID=$(conda run -n student_performance_env mlflow experiments list | awk '/student_performance_experiment/ {print $1}' | tr -d '\r')
+          if [ -z "$EXP_ID" ]; then
+            echo "Experiment not found. Exiting."
+            exit 1
+          fi
+          echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
 
-      # 7. Upload MLflow artifacts
-      - name: Upload MLflow artifacts
+          # Get latest run id for that experiment
+          RUN_ID=$(conda run -n student_performance_env mlflow runs list --experiment-id "$EXP_ID" --order-by start_time desc --max-results 1 | awk 'NR==2 {print $1}' | tr -d '\r')
+          if [ -z "$RUN_ID" ]; then
+            echo "Run ID not found. Exiting."
+            exit 1
+          fi
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+
+          echo "Found EXP_ID=$EXP_ID RUN_ID=$RUN_ID"
+
+      - name: Upload MLflow artifacts (mlruns folder)
         uses: actions/upload-artifact@v4
         with:
           name: mlflow-artifacts
-          path: MLProject/mlruns/
+          path: mlruns/
 
-      # 8. Build Docker Image via MLflow
-      - name: Build Docker Model Image
+      - name: Build Docker Model (via mlflow)
         run: |
-          conda run -n student_performance_env mlflow models build-docker \
-            -m MLProject/mlruns/${{ env.EXP_ID }}/${{ env.RUN_ID }}/artifacts/model \
-            -n ${{ secrets.DOCKERHUB_USERNAME }}/student-ml-model:latest
+          # mlflow models build-docker expects path like mlruns/<exp_id>/<run_id>/artifacts/model
+          MODEL_ARTIFACT_PATH="mlruns/${EXP_ID}/${RUN_ID}/artifacts/model"
+          echo "Building docker image from: $MODEL_ARTIFACT_PATH"
+          if [ ! -d "$MODEL_ARTIFACT_PATH" ]; then
+            echo "Model artifact not found at $MODEL_ARTIFACT_PATH"
+            ls -R mlruns || true
+            exit 1
+          fi
 
-      # 9. Log in to Docker Hub
+          # Build docker image (image name: DOCKERHUB_USERNAME/student-ml-model:latest)
+          conda run -n student_performance_env mlflow models build-docker \
+            -m "$MODEL_ARTIFACT_PATH" \
+            -n "${{ secrets.DOCKERHUB_USERNAME }}/student-ml-model:latest"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # 10. Push Docker image
       - name: Push Docker Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-ml-model:latest
 
-      # 11. Finish Job
       - name: Complete job
         run: echo "CI/CD workflow finished successfully."
