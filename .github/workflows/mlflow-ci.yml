@@ -1,10 +1,8 @@
-# MLflow CI Pipeline
 name: MLflow CI Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 jobs:
@@ -12,102 +10,103 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # -------------------------------
+      # 1. Set up job & environment
+      # -------------------------------
       - name: Set up job
-        run: echo "🚀 Memulai workflow CI untuk MLflow Project..."
+        run: echo "🚀 Starting MLflow CI job"
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python 3.12.7
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.12.7"
+          python-version: 3.12.7
 
       - name: Check Env
         run: |
-          echo "✅ Mengecek versi Python dan pip..."
           python --version
           pip --version
+          echo "✅ Environment ready"
 
-      - name: Install dependencies
+      # -------------------------------
+      # 2. Install dependencies
+      # -------------------------------
+      - name: Install MLflow & Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mlflow==2.19.0 scikit-learn pandas matplotlib seaborn joblib
+
+      # -------------------------------
+      # 3. Run MLflow Project
+      # -------------------------------
+      - name: Run MLflow Project (Training)
         working-directory: MLProject
         run: |
-          echo "📦 Menginstal dependencies..."
-          pip install mlflow==2.19.0 dagshub scikit-learn pandas numpy matplotlib seaborn joblib
+          mlflow run . -P data_path=studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-      - name: Run MLflow project
-        working-directory: MLProject
-        run: |
-          echo "⚙️ Menjalankan MLflow project..."
-          mlflow run . -P data_path=studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv --env-manager=local
-
+      # -------------------------------
+      # 4. Get latest MLflow run_id
+      # -------------------------------
       - name: Get latest MLflow run_id
         working-directory: MLProject
         run: |
-          echo "🔍 Mengambil run_id terbaru..."
-          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs basename)
+          RUN_ID=$(mlflow runs list --experiment-name "Student Performance Workflow CI" --max-results 1 | tail -n +2 | awk '{print $1}')
           echo "MLFLOW_RUN_ID=$RUN_ID" >> $GITHUB_ENV
-          echo "Run ID terbaru: $RUN_ID"
+          echo "Run ID = $RUN_ID"
 
-      - name: Install Python dependencies
-        run: |
-          echo "🧩 Memastikan dependensi Python terinstal..."
-          pip install pandas gdown mlflow
-
-      - name: Upload artifacts to GitHub
+      # -------------------------------
+      # 5. Upload artifacts to GitHub
+      # -------------------------------
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: trained-model
-          path: |
-            MLProject/mlruns/0/*/artifacts/model
-            MLProject/mlruns/0/*/artifacts/metrics.json
+          path: MLProject/mlruns/0/${{ env.MLFLOW_RUN_ID }}/artifacts/
 
-
-      - name: Build Docker Model
+      # -------------------------------
+      # 6. Build Docker Model
+      # -------------------------------
+      - name: Build Docker Image
         working-directory: MLProject
         run: |
-          echo "🐳 Membangun Docker image dari model..."
-          set -e
-          RUN_ID=$(ls -t mlruns/0 | head -n 1)
-          MODEL_PATH="mlruns/0/$RUN_ID/artifacts/model"
+          mlflow models build-docker \
+            -m mlruns/0/${MLFLOW_RUN_ID}/artifacts/model \
+            -n student-performance-mlflow
 
-          echo "🔍 Mencari model di: $MODEL_PATH"
-          if [ ! -d "$MODEL_PATH" ]; then
-            echo "❌ Model folder tidak ditemukan!"
-            echo "Isi folder mlruns/0:"
-            ls -R mlruns/0 || echo "(kosong)"
-            exit 1
-          fi
-
-          echo "✅ Model ditemukan di: $MODEL_PATH"
-          mlflow models build-docker -m "$MODEL_PATH" -n student-performance-mlflow
-
+      # -------------------------------
+      # 7. Log in to Docker Hub
+      # -------------------------------
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: satriana3
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # -------------------------------
+      # 8. Tag & Push Docker Image
+      # -------------------------------
       - name: Tag Docker Image
-        run: |
-          echo "🏷️ Menandai image Docker..."
-          docker tag student-performance-mlflow satriana3/student-performance-mlflow:latest
-          docker tag student-performance-mlflow satriana3/student-performance-mlflow:v1
+        run: docker tag student-performance-mlflow satriana3/student-performance-mlflow:latest
 
       - name: Push Docker Image
-        run: |
-          echo "📤 Mengunggah image ke Docker Hub..."
-          docker push satriana3/student-performance-mlflow:latest
-          docker push satriana3/student-performance-mlflow:v1
+        run: docker push satriana3/student-performance-mlflow:latest
 
+      # -------------------------------
+      # 9. Post steps
+      # -------------------------------
       - name: Post Log in to Docker Hub
-        run: echo "✅ Login Docker Hub selesai."
+        if: always()
+        run: echo "✅ Docker login completed"
 
       - name: Post Set up Python 3.12.7
-        run: echo "✅ Python 3.12.7 sudah disiapkan."
+        if: always()
+        run: echo "✅ Python setup step completed"
 
       - name: Post Run actions/checkout@v4
-        run: echo "✅ Repository sudah di-checkout."
+        if: always()
+        run: echo "✅ Repository checkout post-step completed"
 
       - name: Complete job
-        run: echo "🎉 Workflow CI berhasil diselesaikan tanpa error!"
+        run: echo "🎉 MLflow CI job completed successfully"
