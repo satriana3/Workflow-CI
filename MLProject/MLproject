@@ -1,9 +1,11 @@
 name: Student-Performance
 
-conda_env: MLProject/conda.yaml
+conda_env: conda.yaml
 
 entry_points:
   main:
     parameters:
       data_path: {type: path}
-    command: "python MLProject/modelling.py --data_path {data_path}"
+      tracking_uri: {type: str, default: ""}
+      experiment_name: {type: str, default: "student_performance_experiment"}
+    command: "python MLProject/modelling.py --data_path {data_path} --tracking_uri '{tracking_uri}' --experiment_name '{experiment_name}'"
