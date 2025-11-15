@@ -36,13 +36,20 @@ jobs:
 
       - name: Run MLflow project (creates mlruns in $GITHUB_WORKSPACE/mlruns)
         run: |
-          # Ensure mlruns directory exists in workspace
+          # Ensure mlruns directory exists
           mkdir -p "$MLRUNS_PATH"
-          # Run MLproject; pass tracking_uri to force mlruns to workspace so artifacts are accessible to later steps
+
+          echo "=== Creating MLflow Experiment ==="
+          conda run -n student_performance_env mlflow experiments create \
+            -n student_performance_experiment \
+            --artifact-location "file://$MLRUNS_PATH"
+
+          echo "=== Running MLflow Project ==="
           conda run -n student_performance_env mlflow run MLProject/ \
             -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv \
             -P tracking_uri="file://$MLRUNS_PATH" \
             -P experiment_name="student_performance_experiment"
+
 
       - name: Get EXP_ID and RUN_ID
         id: get_ids
