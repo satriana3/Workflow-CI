@@ -11,54 +11,59 @@ import mlflow.sklearn
 
 def load_data(data_path: str):
     """Load dataset dari path argument MLflow."""
-    data = pd.read_csv(data_path)
-    return data
+    return pd.read_csv(data_path)
 
 
 def main(data_path: str):
-    # MLflow autolog
+
+    # Buat experiment khusus (opsional tapi direkomendasikan)
+    mlflow.set_experiment("student_performance_experiment")
+
+    # Aktifkan autolog
     mlflow.sklearn.autolog()
 
-    # Mulai eksperimen MLflow
     with mlflow.start_run():
-        # Load dataset
+
+        # Load data
         data = load_data(data_path)
 
-        # Pisahkan fitur dan target
-        X = data.drop(['average_score_binned', 'average_score'], axis=1)
-        y = data['average_score_binned']
+        # Pastikan kolom tersedia
+        required_columns = ["average_score_binned", "average_score"]
+        for col in required_columns:
+            if col not in data.columns:
+                raise ValueError(f"Kolom '{col}' tidak ditemukan di dataset!")
 
-        # Bagi data train / test
+        # Pisahkan fitur dan target
+        X = data.drop(required_columns, axis=1)
+        y = data["average_score_binned"]
+
+        # Train-test split
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
 
-        # Inisialisasi model
-        model = RandomForestClassifier(
-            n_estimators=100,
-            random_state=42
-        )
+        # Model
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
 
-        # Train model
+        # Train
         model.fit(X_train, y_train)
 
         # Prediksi
         y_pred = model.predict(X_test)
 
-        # Evaluasi
+        # Evaluasi manual
         accuracy = accuracy_score(y_test, y_pred)
         report = classification_report(y_test, y_pred)
 
-        # Print ke terminal (untuk CI logs)
         print(f"\nAccuracy: {accuracy}")
         print("\nClassification Report:")
         print(report)
 
-        # Log metrik manual (opsional)
+        # Log metric manual
         mlflow.log_metric("accuracy_manual", accuracy)
 
-        # Simpan model
-        mlflow.sklearn.log_model(model, "random_forest_model")
+        # Simpan model — gunakan nama "model" agar CI tidak error
+        mlflow.sklearn.log_model(model, artifact_path="model")
 
         print("\nModel & metrics logged successfully to MLflow")
 
