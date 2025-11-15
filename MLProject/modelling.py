@@ -1,101 +1,76 @@
-import argparse
-import os
-import shutil
-import pandas as pd
-import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
+# modelling.py
 
+import argparse
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score, f1_score, recall_score, precision_score,
-    confusion_matrix, classification_report
-)
-
+from sklearn.metrics import accuracy_score, classification_report
 import mlflow
 import mlflow.sklearn
 
 
-def main(data_path):
-    print(f"📂 Loading dataset from: {data_path}")
-    df = pd.read_csv(data_path)
+def load_data(data_path: str):
+    """Load dataset dari path argument MLflow."""
+    data = pd.read_csv(data_path)
+    return data
 
-    # Basic feature-target setup
-    if "average_score" in df.columns:
-        y = (df["average_score"] > df["average_score"].mean()).astype(int)
-        X = df.drop(columns=["average_score"], errors="ignore")
-    elif "math score" in df.columns:
-        y = (df["math score"] > df["math score"].mean()).astype(int)
-        X = df.drop(columns=["math score"], errors="ignore")
-    else:
-        raise ValueError("Dataset tidak memiliki kolom target yang dikenali.")
 
-    # Keep numeric only
-    X = X.select_dtypes(include=["number"])
+def main(data_path: str):
+    # MLflow autolog
+    mlflow.sklearn.autolog()
 
-    X_train, X_test, Y_train, Y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    # Mulai eksperimen MLflow
+    with mlflow.start_run():
+        # Load dataset
+        data = load_data(data_path)
 
-    # Setup MLflow Locally
-    tracking_dir = os.path.abspath("mlruns")
-    mlflow.set_tracking_uri(f"file://{tracking_dir}")
-    mlflow.set_experiment("Student Performance Workflow CI")
+        # Pisahkan fitur dan target
+        X = data.drop(['average_score_binned', 'average_score'], axis=1)
+        y = data['average_score_binned']
 
-    with mlflow.start_run() as run:
-        run_id = run.info.run_id
-        print(f"🔥 Active MLflow Run ID: {run_id}")
+        # Bagi data train / test
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
 
-        # Model parameters
-        params = {
-            "n_estimators": 100,
-            "max_depth": None,
-            "random_state": 42
-        }
-        mlflow.log_params(params)
+        # Inisialisasi model
+        model = RandomForestClassifier(
+            n_estimators=100,
+            random_state=42
+        )
 
         # Train model
-        model = RandomForestClassifier(**params)
-        model.fit(X_train, Y_train)
+        model.fit(X_train, y_train)
+
+        # Prediksi
         y_pred = model.predict(X_test)
 
-        # Metrics
-        metrics = {
-            "accuracy": accuracy_score(Y_test, y_pred),
-            "f1_score": f1_score(Y_test, y_pred),
-            "recall": recall_score(Y_test, y_pred),
-            "precision": precision_score(Y_test, y_pred),
-        }
-        mlflow.log_metrics(metrics)
+        # Evaluasi
+        accuracy = accuracy_score(y_test, y_pred)
+        report = classification_report(y_test, y_pred)
 
-        # Confusion matrix
-        os.makedirs("artifacts", exist_ok=True)
-        cm = confusion_matrix(Y_test, y_pred)
-        plt.figure(figsize=(6, 5))
-        sns.heatmap(cm, annot=True, fmt="d")
-        plt.title("Confusion Matrix")
-        cm_path = "artifacts/confusion_matrix.png"
-        plt.savefig(cm_path)
-        plt.close()
-        mlflow.log_artifact(cm_path, artifact_path="artifacts")
+        # Print ke terminal (untuk CI logs)
+        print(f"\nAccuracy: {accuracy}")
+        print("\nClassification Report:")
+        print(report)
 
-        # Classification report
-        report_path = "artifacts/classification_report.txt"
-        with open(report_path, "w") as f:
-            f.write(classification_report(Y_test, y_pred))
-        mlflow.log_artifact(report_path, artifact_path="artifacts")
+        # Log metrik manual (opsional)
+        mlflow.log_metric("accuracy_manual", accuracy)
 
-        # Save & log model
-        model_path = "model"
-        mlflow.sklearn.log_model(model, artifact_path="model")
+        # Simpan model
+        mlflow.sklearn.log_model(model, "random_forest_model")
 
-    print("\n🎉 Training selesai.")
-    print("Run ID:", run_id)
+        print("\nModel & metrics logged successfully to MLflow")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, required=True)
+    parser.add_argument(
+        "--data_path",
+        type=str,
+        required=True,
+        help="Path ke dataset preprocessing"
+    )
     args = parser.parse_args()
+
     main(args.data_path)
