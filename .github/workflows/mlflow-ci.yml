@@ -1,4 +1,4 @@
-name: Workflow CI
+name: Workflow CI - MLProject
 
 on:
   push:
@@ -6,101 +6,80 @@ on:
   pull_request:
 
 jobs:
-  build-and-deploy:
+  ml-ci:
     runs-on: ubuntu-latest
-    env:
-      # lokasi mlruns di workspace (absolute) nanti dipakai oleh modelling.py via --tracking_uri
-      MLRUNS_PATH: ${{ github.workspace }}/mlruns
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Set up Python 3.12.7
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.7'
+    # Checkout repo
+    - name: Run actions/checkout@v3
+      uses: actions/checkout@v3
 
-      - name: Check Python Environment
-        run: |
-          python --version
-          pip --version
+    # Setup Python
+    - name: Set up Python 3.12.7
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12.7"
 
-      - name: Set up Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          environment-file: MLProject/conda.yaml
-          activate-environment: student_performance_env
-          auto-activate-base: false
-          python-version: 3.12
+    # Check ENV
+    - name: Check Env
+      run: |
+        python --version
+        pip --version
+        ls -R .
 
-      - name: Run MLflow Project
-        run: |
-          echo "=== Setting MLflow Tracking URI ==="
-          mkdir -p MLProject/mlruns
-          export MLFLOW_TRACKING_URI="file://$GITHUB_WORKSPACE/MLProject/mlruns"
-      
-          echo "=== Creating / Using Experiment ==="
-          EXP_ID=$(conda run -n student_performance_env mlflow experiments create -n "student_performance_experiment" 2>/dev/null || conda run -n student_performance_env mlflow experiments list | grep student_performance_experiment | awk '{print $1}')
-          export MLFLOW_EXPERIMENT_ID=$EXP_ID
-          echo "Using experiment ID: $EXP_ID"
-      
-          echo "=== Running MLproject (correct env) ==="
-          conda run -n student_performance_env mlflow run MLProject/ \
-            -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
+    # Install Python dependencies for MLflow CLI run
+    - name: Install dependencies
+      run: |
+        pip install mlflow==2.12.0 scikit-learn pandas numpy google-auth google-auth-oauthlib google-auth-httplib2 pydrive
 
-      - name: Get EXP_ID and RUN_ID
-        id: get_ids
-        run: |
-          # Find experiment id for our known experiment name
-          EXP_ID=$(conda run -n student_performance_env mlflow experiments list | awk '/student_performance_experiment/ {print $1}' | tr -d '\r')
-          if [ -z "$EXP_ID" ]; then
-            echo "Experiment not found. Exiting."
-            exit 1
-          fi
-          echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
+    # Run MLProject using MLflow
+    - name: Run mlflow project
+      run: |
+        mlflow run MLProject \
+          -P data_path="MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv"
 
-          # Get latest run id for that experiment
-          RUN_ID=$(conda run -n student_performance_env mlflow runs list --experiment-id "$EXP_ID" --order-by start_time desc --max-results 1 | awk 'NR==2 {print $1}' | tr -d '\r')
-          if [ -z "$RUN_ID" ]; then
-            echo "Run ID not found. Exiting."
-            exit 1
-          fi
-          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+    # GET latest MLflow run_id
+    - name: Get latest MLflow run_id
+      id: get_runid
+      run: |
+        run_id=$(ls mlruns/0 | grep -v meta.yaml | sort | tail -n 1)
+        echo "run_id=$run_id" >> $GITHUB_ENV
+        echo "Latest run_id: $run_id"
 
-          echo "Found EXP_ID=$EXP_ID RUN_ID=$RUN_ID"
+    # Install Python deps again inside runner for uploading to Drive
+    - name: Install Python dependencies
+      run: |
+        pip install pydrive google-auth google-auth-oauthlib google-auth-httplib2
 
-      - name: Upload MLflow artifacts (mlruns folder)
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlflow-artifacts
-          path: mlruns/
+    # Upload artifacts (mlruns folder) to Google Drive
+    - name: Upload to Google Drive
+      env:
+        GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+        GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+        GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+      run: |
+        python MLProject/upload_to_drive.py mlruns
 
-      - name: Build Docker Model (via mlflow)
-        run: |
-          # mlflow models build-docker expects path like mlruns/<exp_id>/<run_id>/artifacts/model
-          MODEL_ARTIFACT_PATH="mlruns/${EXP_ID}/${RUN_ID}/artifacts/model"
-          echo "Building docker image from: $MODEL_ARTIFACT_PATH"
-          if [ ! -d "$MODEL_ARTIFACT_PATH" ]; then
-            echo "Model artifact not found at $MODEL_ARTIFACT_PATH"
-            ls -R mlruns || true
-            exit 1
-          fi
+    # Build docker model using mlflow
+    - name: Build Docker Model
+      run: |
+        mlflow models build-docker -m "mlruns/0/${run_id}/artifacts/model" -n student_performance_model
 
-          # Build docker image (image name: DOCKERHUB_USERNAME/student-ml-model:latest)
-          conda run -n student_performance_env mlflow models build-docker \
-            -m "$MODEL_ARTIFACT_PATH" \
-            -n "${{ secrets.DOCKERHUB_USERNAME }}/student-ml-model:latest"
+    # Login to Docker Hub
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+    # Tag docker
+    - name: Tag Docker Image
+      run: |
+        docker tag student_performance_model:latest \
+        ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
 
-      - name: Push Docker Image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-ml-model:latest
-
-      - name: Complete job
-        run: echo "CI/CD workflow finished successfully."
+    # Push docker to hub
+    - name: Push Docker Image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
