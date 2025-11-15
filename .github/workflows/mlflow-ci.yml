@@ -3,7 +3,7 @@ name: Workflow CI - MLProject
 on:
   push:
     branches: [ main ]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   ml-ci:
@@ -13,84 +13,57 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.12.7
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: "3.12.7"
+        python-version: "3.10"
 
-    - name: Show repo and python
+    - name: Install Python dependencies
       run: |
-        python --version
-        pip --version
-        echo "Workspace: $GITHUB_WORKSPACE"
-        pwd
-        ls -la
+        pip install mlflow==2.19.0
+        pip install scikit-learn==1.5.2 pandas numpy matplotlib seaborn joblib
 
-    - name: Install Python dependencies (runner environment)
+    - name: Prepare mlruns folder and set tracking URI
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install wheel setuptools
-        # use same mlflow as conda.yaml to avoid incompatibilities
-        python -m pip install mlflow==2.19.0 scikit-learn==1.5.2 pandas==2.2.3 numpy==1.26.4 matplotlib==3.9.2 seaborn==0.13.2 joblib
+        mkdir -p mlruns
+        echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
 
-    - name: Prepare mlruns folder and set MLFLOW_TRACKING_URI
+    # === PERBAIKAN UTAMA ===
+    - name: Create experiment BEFORE running project
       run: |
-        mkdir -p "${GITHUB_WORKSPACE}/mlruns"
-        echo "Using tracking uri: file://${GITHUB_WORKSPACE}/mlruns"
-        export MLFLOW_TRACKING_URI="file://${GITHUB_WORKSPACE}/mlruns"
-        # persist to env for later steps in this job
-        echo "MLFLOW_TRACKING_URI=file://${GITHUB_WORKSPACE}/mlruns" >> $GITHUB_ENV
+        mlflow experiments create -n "student_performance_experiment" || true
+        EXP_ID=$(mlflow experiments list | grep "student_performance_experiment" | awk '{print $1}')
+        echo "EXP_ID=$EXP_ID"
+        echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
 
     - name: Run MLflow Project (env-manager local)
       run: |
-        # run MLflow project using local env manager so it doesn't try to create/activate conda env
         mlflow run MLProject/ \
-          --env-manager local \
-          -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv \
-          -P tracking_uri="file://${GITHUB_WORKSPACE}/mlruns" \
-          -P experiment_name="student_performance_experiment"
+          --env-manager=local \
+          --experiment-id $EXP_ID \
+          -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-    - name: Get EXP_ID and RUN_ID
-      id: get_ids
+    - name: Get latest RUN_ID
       run: |
-        # find the only experiment folder created under mlruns
-        EXP_ID=$(ls mlruns | head -n 1)
-        if [ -z "$EXP_ID" ]; then
-          echo "No experiment found in mlruns/"
-          exit 1
-        fi
         RUN_ID=$(ls mlruns/$EXP_ID | grep -v meta.yaml | sort | tail -n 1)
-        if [ -z "$RUN_ID" ]; then
-          echo "No run found for experiment $EXP_ID"
-          exit 1
-        fi
-        echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
         echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-        echo "Found EXP_ID=$EXP_ID RUN_ID=$RUN_ID"
+        echo "Found RUN_ID=$RUN_ID"
 
-    - name: Upload MLflow artifacts (mlruns) to GitHub Actions artifacts
+    - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: mlflow-artifacts
         path: mlruns/
 
-    - name: Build Docker Model via MLflow
+    - name: Build Docker Model
       env:
-        DOCKER_IMAGE_NAME: "${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest"
+        DOCKER_IMAGE_NAME: "${{ secrets.DOCKERHUB_USERNAME }}/student_performance_model:latest"
       run: |
-        set -e
-        echo "Model artifact path: mlruns/${EXP_ID}/${RUN_ID}/artifacts/model"
-        if [ ! -d "mlruns/${EXP_ID}/${RUN_ID}/artifacts/model" ]; then
-          echo "Model artifact not found, listing mlruns/ for debug:"
-          ls -R mlruns || true
-          exit 1
-        fi
-        # Build docker image (needs docker daemon available on runner)
         mlflow models build-docker \
           -m "mlruns/${EXP_ID}/${RUN_ID}/artifacts/model" \
           -n "${DOCKER_IMAGE_NAME}"
 
-    - name: Log in to Docker Hub
+    - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -98,7 +71,7 @@ jobs:
 
     - name: Push Docker Image
       run: |
-        docker push ${{ secrets.DOCKER_USERNAME }}/student_performance_model:latest
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/student_performance_model:latest"
 
-    - name: Complete job
-      run: echo "CI/CD workflow finished successfully."
+    - name: Complete Job
+      run: echo "Workflow completed successfully!"
