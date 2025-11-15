@@ -44,7 +44,7 @@ jobs:
       - name: Run MLflow Project (Training)
         working-directory: MLProject
         run: |
-          mlflow run . -P data_path=studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
+          mlflow run . -P data_path=../studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
       # -------------------------------
       # 4. Get latest MLflow run_id
