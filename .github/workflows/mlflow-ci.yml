@@ -46,8 +46,7 @@ jobs:
       # 6. Run MLflow project
       - name: Run MLflow project
         run: |
-          conda run -n mlproject-env mlflow run MLProject/MLProject \
-            -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv \
+            mlflow run MLProject -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv 
   
 
       # 7. Get latest MLflow run_id
