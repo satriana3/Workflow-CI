@@ -1,13 +1,16 @@
 name: student_performance_env
 
 channels:
-  - defaults
   - conda-forge
+  - defaults
 
 dependencies:
   - python=3.10
   - pip
   - pip:
-      - mlflow
+      - mlflow==2.12.1
       - scikit-learn
       - pandas
+      - numpy
+      - cloudpickle
+      - psutil
