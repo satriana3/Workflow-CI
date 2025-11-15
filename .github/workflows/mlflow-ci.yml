@@ -34,21 +34,21 @@ jobs:
           auto-activate-base: false
           python-version: 3.12
 
-      - name: Run MLflow project (creates mlruns in $GITHUB_WORKSPACE/mlruns)
+      - name: Run MLflow Project
         run: |
-          # Ensure mlruns directory exists
-          mkdir -p "$MLRUNS_PATH"
+          echo "=== Setting MLflow Tracking URI ==="
+          mkdir -p MLProject/mlruns
+          export MLFLOW_TRACKING_URI="file://$GITHUB_WORKSPACE/MLProject/mlruns"
+      
+          echo "=== Creating / Using Experiment ==="
+          EXP_ID=$(mlflow experiments create -n "student_performance_experiment" 2>/dev/null || mlflow experiments list | grep student_performance_experiment | awk '{print $1}')
+          export MLFLOW_EXPERIMENT_ID=$EXP_ID
+          echo "Using experiment ID: $EXP_ID"
+      
+          echo "=== Running MLproject ==="
+          mlflow run MLProject/ \
+            -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-          echo "=== Creating MLflow Experiment ==="
-          conda run -n student_performance_env mlflow experiments create \
-            -n student_performance_experiment \
-            --artifact-location "file://$MLRUNS_PATH"
-
-          echo "=== Running MLflow Project ==="
-          conda run -n student_performance_env mlflow run MLProject/ \
-            -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv \
-            -P tracking_uri="file://$MLRUNS_PATH" \
-            -P experiment_name="student_performance_experiment"
 
 
       - name: Get EXP_ID and RUN_ID
