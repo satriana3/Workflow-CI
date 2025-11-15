@@ -1,9 +1,9 @@
-name: student_performance_project
+name: Student-Performance
 
 conda_env: conda.yaml
 
 entry_points:
   main:
     parameters:
-      data_path: {type: str}
-    command: "python modelling.py --data_path {data_path}"
+      data_path: {type: path}
+    command: "python MLProject/modelling.py --data_path {data_path}"
