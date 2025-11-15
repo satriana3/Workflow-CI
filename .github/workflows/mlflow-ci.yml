@@ -38,8 +38,10 @@ jobs:
     # Run MLProject using MLflow
     - name: Run mlflow project
       run: |
-        mlflow run MLProject \
-          -P data_path="MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv"
+        conda run -n student_performance_env mlflow run MLProject/ \
+        --no-conda \
+        -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
+
 
     # GET latest MLflow run_id
     - name: Get latest MLflow run_id
