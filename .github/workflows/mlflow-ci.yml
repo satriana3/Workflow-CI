@@ -31,6 +31,8 @@ jobs:
     # Install Python dependencies for MLflow CLI run
     - name: Install dependencies
       run: |
+        pip install --upgrade pip
+        pip install setuptools wheel
         pip install mlflow==2.12.0 scikit-learn pandas numpy google-auth google-auth-oauthlib google-auth-httplib2 pydrive
 
     # Run MLProject using MLflow
