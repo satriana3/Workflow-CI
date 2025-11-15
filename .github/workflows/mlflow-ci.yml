@@ -30,11 +30,14 @@ jobs:
           google-auth google-auth-oauthlib google-auth-httplib2 \
           wheel setuptools
 
-    # Run MLflow project (no conda)
+    # Run MLflow Project (force no-conda)
     - name: Run MLflow Project
+      env:
+        MLFLOW_CONDA_DISABLED: "true"
       run: |
         mlflow run MLProject/ \
           -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
+
 
     # Get experiment id & run id
     - name: Get MLflow Run Information
