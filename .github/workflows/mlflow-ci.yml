@@ -1,4 +1,4 @@
-name: Workflow CI
+name: CI Workflow
 
 on:
   push:
@@ -7,86 +7,68 @@ on:
   pull_request:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Python 3.12.7
       - name: Set up Python 3.12.7
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12.7
-
-      # 3. Check Environment
-      - name: Check Env
-        run: |
-          python --version
-          pip --version
-
-      # 4. Install dependencies (pip terlebih dahulu)
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install mlflow pandas scikit-learn
-
-      # 5. Set up Conda environment
-      - name: Set up Conda Environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: MLProject/conda.yaml
-          activate-environment: mlflow-env
-          auto-update-conda: true
           python-version: 3.12.7
+          auto-activate-base: false
 
-      # 6. Run MLflow project
+      - name: Create and activate conda environment
+        run: |
+          conda env create -f MLProject/conda.yaml -n mlproject-env
+          conda activate mlproject-env
+          python --version
+
+      - name: Check environment
+        run: |
+          source "$(conda info --base)/etc/profile.d/conda.sh"
+          conda activate mlproject-env
+          conda list
+
+      - name: Install dependencies (if any extra)
+        run: |
+          conda activate mlproject-env
+          pip install -r MLProject/requirements.txt || echo "No extra requirements.txt found"
+
       - name: Run MLflow project
         run: |
-          mlflow run MLProject/MLProject -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv --no-conda
+          conda activate mlproject-env
+          mlflow run MLProject/MLProject -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-      # 7. Get latest MLflow run_id
-      - name: Get latest MLflow run_id
-        id: mlflow_run
+      - name: Get latest MLflow run ID
         run: |
-          export RUN_ID=$(mlflow runs list --experiment-id 0 --order-by start_time desc --max-results 1 | awk 'NR==2 {print $1}')
+          conda activate mlproject-env
+          RUN_ID=$(mlflow runs list --experiment-id 0 --order-by start_time --desc | head -n 2 | tail -n 1 | awk '{print $1}')
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
 
-      # 8. Upload artifacts to GitHub
-      - name: Upload MLflow artifacts
+      - name: Upload artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: mlflow-artifacts
-          path: MLProject/mlruns/
+          path: MLProject/MLProject/mlruns/0/$RUN_ID/artifacts/
 
-      # 9. Build Docker image
       - name: Build Docker Model
         run: |
-          docker build -t student-ml-model:latest MLProject/MLProject
+          docker build -t mydockerhubuser/studentsperformance:latest MLProject/MLProject
 
-      # 10. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 11. Tag Docker Image
       - name: Tag Docker Image
         run: |
-          docker tag student-ml-model:latest ${{ secrets.DOCKER_USERNAME }}/student-ml-model:latest
+          docker tag mydockerhubuser/studentsperformance:latest mydockerhubuser/studentsperformance:$GITHUB_SHA
 
-      # 12. Push Docker Image
       - name: Push Docker Image
         run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/student-ml-model:latest
-
-      # 13. Post Actions
-      - name: Post Set up Python 3.12.7
-        run: echo "Python 3.12.7 setup complete."
-      - name: Post Run actions/checkout@v4
-        run: echo "Checkout complete."
-      - name: Complete job
-        run: echo "CI/CD workflow finished successfully."
+          docker push mydockerhubuser/studentsperformance:latest
+          docker push mydockerhubuser/studentsperformance:$GITHUB_SHA
