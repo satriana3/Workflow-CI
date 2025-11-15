@@ -42,7 +42,7 @@ jobs:
       # 3. Run MLflow Project
       # -------------------------------
       - name: Run MLflow Project (Training)
-        working-directory: MLproject
+        working-directory: MLProject/MLprojek
         run: |
           mlflow run . -P data_path=studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
