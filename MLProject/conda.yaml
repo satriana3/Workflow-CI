@@ -1,14 +1,14 @@
 name: student_performance_env
 channels:
-  - conda-forge
   - defaults
+  - conda-forge
 dependencies:
   - python=3.12.7
   - pip<=24.2
   - pip:
       - mlflow==2.19.0
       - dagshub
-      - scikit-learn==1.5.2 
+      - scikit-learn==1.5.2
       - pandas==2.2.3
       - numpy==1.26.4
       - matplotlib==3.9.2
