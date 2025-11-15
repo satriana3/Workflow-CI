@@ -1,4 +1,4 @@
-name: "StudentPerformance"
+name: Student-Performance
 
 conda_env: conda.yaml
 
