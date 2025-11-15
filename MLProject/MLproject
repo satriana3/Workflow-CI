@@ -1,12 +1,9 @@
-name: Student-Performance
+name: student_performance_project
 
-# keep conda.yaml in repo for requirement/assignment but we will run with env-manager local in CI
 conda_env: conda.yaml
 
 entry_points:
   main:
     parameters:
-      data_path: {type: path}
-      tracking_uri: {type: str, default: ""}
-      experiment_name: {type: str, default: "student_performance_experiment"}
-    command: "python modelling.py --data_path {data_path} --tracking_uri {tracking_uri} --experiment_name {experiment_name}"
+      data_path: {type: str}
+    command: "python modelling.py --data_path {data_path}"
