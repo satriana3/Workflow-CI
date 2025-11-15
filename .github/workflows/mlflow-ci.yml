@@ -37,7 +37,7 @@ jobs:
       - name: Set up Conda Environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: MLProject/conda.yml
+          environment-file: ./MLProject/conda.yml 
           activate-environment: mlflow-env
           auto-update-conda: true
           python-version: 3.12.7
