@@ -1,7 +1,7 @@
 name: student_performance_env
 channels:
-  - defaults
   - conda-forge
+  - defaults
 dependencies:
   - python=3.12.7
   - pip<=24.2
