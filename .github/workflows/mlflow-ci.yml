@@ -1,77 +1,50 @@
-name: Workflow CI - MLProject
+name: CI-MLflow
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ "main" ]
 
 jobs:
-  ml-ci:
+  build:
     runs-on: ubuntu-latest
 
     steps:
+
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
       with:
-        python-version: "3.10"
+        activate-environment: student_performance_env
+        environment-file: MLProject/conda.yaml
+        auto-activate-base: false
 
-    - name: Install Python dependencies
-      run: |
-        pip install mlflow==2.19.0
-        pip install scikit-learn==1.5.2 pandas numpy matplotlib seaborn joblib
+    - name: Verify conda environment
+      run: conda info --envs
 
-    - name: Prepare mlruns folder and set tracking URI
-      run: |
-        mkdir -p mlruns
-        echo "MLFLOW_TRACKING_URI=file://$GITHUB_WORKSPACE/mlruns" >> $GITHUB_ENV
-
-    # === PERBAIKAN UTAMA ===
-    - name: Create experiment BEFORE running project
-      run: |
-        mlflow experiments create -n "student_performance_experiment" || true
-        EXP_ID=$(mlflow experiments list | grep "student_performance_experiment" | awk '{print $1}')
-        echo "EXP_ID=$EXP_ID"
-        echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
-
-    - name: Run MLflow Project (env-manager local)
+    - name: Run MLflow Project
       run: |
         mlflow run MLProject/ \
-          --env-manager=local \
-          --experiment-id $EXP_ID \
           -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
-    - name: Get latest RUN_ID
-      run: |
-        RUN_ID=$(ls mlruns/$EXP_ID | grep -v meta.yaml | sort | tail -n 1)
-        echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-        echo "Found RUN_ID=$RUN_ID"
-
     - name: Upload MLflow artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: mlflow-artifacts
-        path: mlruns/
+        path: mlruns
 
-    - name: Build Docker Model
-      env:
-        DOCKER_IMAGE_NAME: "${{ secrets.DOCKERHUB_USERNAME }}/student_performance_model:latest"
-      run: |
-        mlflow models build-docker \
-          -m "mlruns/${EXP_ID}/${RUN_ID}/artifacts/model" \
-          -n "${DOCKER_IMAGE_NAME}"
-
-    - name: Login to Docker Hub
+    - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Build MLflow Docker Image
+      run: |
+        mlflow models build-docker \
+          --model-uri mlruns/0/*/artifacts/model \
+          --name ${{ secrets.DOCKERHUB_USER }}/student-performance:latest
     - name: Push Docker Image
       run: |
-        docker push "${{ secrets.DOCKERHUB_USERNAME }}/student_performance_model:latest"
-
-    - name: Complete Job
-      run: echo "Workflow completed successfully!"
+        docker push ${{ secrets.DOCKERHUB_USER }}/student-performance:latest
