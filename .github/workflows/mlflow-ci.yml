@@ -41,15 +41,13 @@ jobs:
           export MLFLOW_TRACKING_URI="file://$GITHUB_WORKSPACE/MLProject/mlruns"
       
           echo "=== Creating / Using Experiment ==="
-          EXP_ID=$(mlflow experiments create -n "student_performance_experiment" 2>/dev/null || mlflow experiments list | grep student_performance_experiment | awk '{print $1}')
+          EXP_ID=$(conda run -n student_performance_env mlflow experiments create -n "student_performance_experiment" 2>/dev/null || conda run -n student_performance_env mlflow experiments list | grep student_performance_experiment | awk '{print $1}')
           export MLFLOW_EXPERIMENT_ID=$EXP_ID
           echo "Using experiment ID: $EXP_ID"
       
-          echo "=== Running MLproject ==="
-          mlflow run MLProject/ \
+          echo "=== Running MLproject (correct env) ==="
+          conda run -n student_performance_env mlflow run MLProject/ \
             -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
-
-
 
       - name: Get EXP_ID and RUN_ID
         id: get_ids
