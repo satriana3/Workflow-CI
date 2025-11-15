@@ -30,21 +30,20 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mlflow pandas scikit-learn
 
       # 5. Set up Conda Environment
       - name: Set up Conda Environment
         uses: conda-incubator/setup-miniconda@v2
         with:
           environment-file: MLProject/conda.yaml
-          activate-environment: mlproject-env
+          activate-environment: student_performance_env
           python-version: 3.12
           auto-activate-base: false
 
       # 6. Run MLflow project
       - name: Run MLflow project
         run: |
-          conda run -n mlproject-env mlflow run MLProject \
+          conda run -n student_performance_env mlflow run MLProject/ \
             -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
       # 7. Get latest MLflow run_id
