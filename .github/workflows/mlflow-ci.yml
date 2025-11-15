@@ -34,7 +34,6 @@ jobs:
     - name: Run MLflow Project
       run: |
         mlflow run MLProject/ \
-          --no-conda \
           -P data_path=MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv
 
     # Get experiment id & run id
