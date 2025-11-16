@@ -54,6 +54,7 @@ jobs:
           ART="${GITHUB_WORKSPACE}/MLProject/artifacts/random_forest_model"
           python MLProject/upload_to_drive.py "$ART" "$DRIVE_FOLDER_ID"
 
+
       - name: Build Docker image
         run: |
           ART="${GITHUB_WORKSPACE}/MLProject/artifacts/random_forest_model"
