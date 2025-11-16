@@ -32,23 +32,27 @@ if not expected_cols.issubset(set(data.columns)):
 X = data.drop(['average_score_binned','average_score'], axis=1)
 y = data['average_score_binned']
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
-# Use MLflow autolog (mlflow run will create the run)
-mlflow.sklearn.autolog()
+# MULAI RUN MLflow
+with mlflow.start_run():
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
 
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
 
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-report = classification_report(y_test, y_pred)
+    print(f"Accuracy: {accuracy}")
+    print("Classification Report:")
+    print(report)
 
-print(f"Accuracy: {accuracy}")
-print("Classification Report:")
-print(report)
+    # log metric
+    mlflow.log_metric("accuracy", float(accuracy))
 
-mlflow.log_metric("accuracy", float(accuracy))
-mlflow.sklearn.log_model(model, "random_forest_model")
+    # **log model manual**
+    mlflow.sklearn.log_model(model, "random_forest_model")
 
-print("Model and metrics logged to MLflow")
+    print("Model and metrics logged to MLflow")
