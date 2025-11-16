@@ -1,8 +1,9 @@
 import os
 import sys
 import json
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2 import service_account
 
 def fatal(msg):
     print("FATAL: " + msg, file=sys.stderr)
@@ -17,51 +18,52 @@ parent_folder_id = sys.argv[2]
 if not os.path.exists(local_root):
     fatal(f"Local path not found: {local_root}")
 
-# Tulis service account JSON ke file
+# Load service account JSON from secret
 sa_json = os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON")
 if not sa_json:
     fatal("Missing GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON secret")
 
+# Write service account JSON to temporary file
 service_json_path = "/tmp/service_account.json"
 with open(service_json_path, "w") as f:
-    # pastikan format JSON valid
-    f.write(json.dumps(json.loads(sa_json)))
+    f.write(sa_json)
 
-# Authenticate
-gauth = GoogleAuth()
-gauth.settings['client_config_file'] = service_json_path
-gauth.ServiceAuth()  # <--- tidak ada argumen di sini
-drive = GoogleDrive(gauth)
+# Authenticate using service account
+SCOPES = ['https://www.googleapis.com/auth/drive']
+credentials = service_account.Credentials.from_service_account_file(
+    service_json_path, scopes=SCOPES
+)
+service = build('drive', 'v3', credentials=credentials)
 
-# Helper functions
+# Helper function to create folder in Google Drive
 def create_folder(name, parent_id):
-    md = {
-        "title": name,
-        "mimeType": "application/vnd.google-apps.folder",
-        "parents": [{"id": parent_id}]
+    metadata = {
+        'name': name,
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [parent_id]
     }
-    f = drive.CreateFile(md)
-    f.Upload()
-    return f["id"]
+    folder = service.files().create(body=metadata, fields='id').execute()
+    return folder['id']
 
-def upload_file(path, parent_id):
-    fname = os.path.basename(path)
-    meta = {"title": fname, "parents": [{"id": parent_id}]}
-    f = drive.CreateFile(meta)
-    f.SetContentFile(path)
-    f.Upload()
-    print(f"Uploaded file: {path} -> {fname}")
+# Helper function to upload a single file
+def upload_file(file_path, parent_id):
+    file_name = os.path.basename(file_path)
+    media = MediaFileUpload(file_path, resumable=True)
+    file_metadata = {'name': file_name, 'parents': [parent_id]}
+    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    print(f"Uploaded {file_path} -> {file_name}")
 
+# Recursive upload function
 def upload_dir(local_dir, parent_id):
-    base = os.path.basename(local_dir.rstrip(os.sep))
-    folder_id = create_folder(base, parent_id)
+    folder_name = os.path.basename(local_dir.rstrip(os.sep))
+    folder_id = create_folder(folder_name, parent_id)
     for entry in sorted(os.listdir(local_dir)):
-        ep = os.path.join(local_dir, entry)
-        if os.path.isdir(ep):
-            upload_dir(ep, folder_id)
+        path = os.path.join(local_dir, entry)
+        if os.path.isdir(path):
+            upload_dir(path, folder_id)
         else:
-            upload_file(ep, folder_id)
+            upload_file(path, folder_id)
 
 # Start upload
 upload_dir(local_root, parent_folder_id)
-print("Upload finished.")
+print("Upload finished successfully.")
