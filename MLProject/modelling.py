@@ -19,23 +19,21 @@ y = data['average_score_binned']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-mlflow.set_experiment("Student Performance Prediction")
+# Gunakan MLflow autolog saja, tanpa start_run
+mlflow.sklearn.autolog()
 
-# Gunakan nested=True agar tidak konflik dengan run dari CLI
-with mlflow.start_run(nested=True):
-    mlflow.sklearn.autolog()
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
 
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    report = classification_report(y_test, y_pred)
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+report = classification_report(y_test, y_pred)
 
-    print(f"Accuracy: {accuracy}")
-    print("Classification Report:")
-    print(report)
+print(f"Accuracy: {accuracy}")
+print("Classification Report:")
+print(report)
 
-    mlflow.log_metric("accuracy", accuracy)
-    mlflow.sklearn.log_model(model, "random_forest_model")
+mlflow.log_metric("accuracy", accuracy)
+mlflow.sklearn.log_model(model, "random_forest_model")
 
-    print("Model and metrics logged to MLflow")
+print("Model and metrics logged to MLflow")
