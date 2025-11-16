@@ -84,7 +84,6 @@ def upload_dir(local_dir, parent_id=None):
 # perform upload
 if os.path.isdir(artifact_path):
     if dest_folder_id:
-        # create subfolder inside provided folder
         upload_dir(artifact_path, parent_id=dest_folder_id)
     else:
         upload_dir(artifact_path, parent_id=None)
