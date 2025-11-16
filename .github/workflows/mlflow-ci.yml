@@ -52,13 +52,17 @@ jobs:
       - name: Check artifact path
         run: |
           ART="${EXP_DIR}/${RUN_ID}/artifacts/random_forest_model"
-          echo "Checking artifact path: $ART"
+          echo "Expected artifact path: $ART"
+          
+          echo "Listing run folder:"
+          ls -R "${EXP_DIR}/${RUN_ID}"
+          
           if [ ! -d "$ART" ]; then
             echo "ERROR: Artifact folder not found!"
-            ls -R "${EXP_DIR}/${RUN_ID}"
             exit 1
           fi
           echo "Artifact found."
+
 
       - name: Upload to Google Drive
         env:
