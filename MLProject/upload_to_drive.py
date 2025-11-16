@@ -5,10 +5,9 @@ import sys
 
 artifact_path = sys.argv[1]
 
-# Autentikasi dengan metode local webserver
-# GitHub Actions akan menggunakan OAuth2 flow otomatis
+# Auth otomatis via command line (langsung jalan di GitHub Actions)
 gauth = GoogleAuth()
-gauth.LocalWebserverAuth()  # akan membuka token OAuth2 di runtime
+gauth.CommandLineAuth()  # Non-interactive OAuth
 drive = GoogleDrive(gauth)
 
 def upload_file(file_path):
