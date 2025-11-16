@@ -14,7 +14,7 @@ jobs:
       - name: Set up job
         run: echo "Starting CI job..."
 
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -29,44 +29,45 @@ jobs:
 
       - name: Run MLflow project
         env:
-          # important: use file: scheme and enable run-id env var
           MLFLOW_TRACKING_URI: "file:./mlruns"
         run: |
-          echo "Running MLflow project with env-manager local"
-          mlflow run MLProject -e main --env-manager=local --experiment-name "Student Performance Prediction" \
+          echo "Running MLflow project"
+          mlflow run MLProject -e main --env-manager=local \
+            --experiment-name "Student Performance Prediction" \
             -P data_path=data/StudentsPerformance_preprocessing.csv
 
       - name: Get latest MLflow run_id
         id: get_run
         run: |
-          set -e
           EXP_DIR="mlruns/0"
-          echo "DEBUG: looking for experiment dir -> $EXP_DIR"
+          echo "Looking for experiment directory $EXP_DIR"
+
           if [ ! -d "$EXP_DIR" ]; then
-            echo "ERROR: mlruns folder not found at $EXP_DIR"
-            ls -la || true
+            echo "ERROR: Experiment directory not found!"
             exit 1
           fi
 
           RUN_ID=$(ls -t "$EXP_DIR" | head -n 1)
+
           if [ -z "$RUN_ID" ]; then
-            echo "ERROR: no run id found in $EXP_DIR"
+            echo "ERROR: No run ID found"
             exit 1
           fi
+
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Latest run_id: $RUN_ID"
 
       - name: Check artifact path
         run: |
           ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Artifact path: $ART"
-          ls -la "$(pwd)/mlruns/0" || true
-          ls -la "$(pwd)/mlruns/0/${{ env.RUN_ID }}" || true
+          echo "Checking artifact: $ART"
+
           if [ ! -d "$ART" ]; then
-            echo "ERROR: Artifact folder not found: $ART"
+            echo "ERROR: Artifact folder not found!"
             exit 1
           fi
-          echo "Artifact found."
+
+          echo "Artifact found successfully."
 
       - name: Upload to Google Drive
         env:
@@ -74,8 +75,8 @@ jobs:
           DRIVE_FOLDER_ID: "1-kDHpp4yBNSomgiNEZEyDPreZ1myTZOI"
         run: |
           ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Uploading directory: $ART to DRIVE_FOLDER_ID=${DRIVE_FOLDER_ID}"
-          python MLProject/upload_to_drive.py "$ART" "${DRIVE_FOLDER_ID}"
+          echo "Uploading directory: $ART"
+          python MLProject/upload_to_drive.py "$ART" "$DRIVE_FOLDER_ID"
 
       - name: Build Docker image
         run: |
