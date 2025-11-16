@@ -5,9 +5,20 @@ import sys
 
 artifact_path = sys.argv[1]
 
-# Auth otomatis via command line (langsung jalan di GitHub Actions)
+# Ambil JSON dari environment variable
+service_account_info = os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON")
+if not service_account_info:
+    raise Exception("Environment variable GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON tidak ditemukan")
+
+# Tulis sementara ke file
+with open("/tmp/service_account.json", "w") as f:
+    f.write(service_account_info)
+
 gauth = GoogleAuth()
-gauth.CommandLineAuth()  # Non-interactive OAuth
+gauth.ServiceAuthSettings = {
+    "client_config_file": "/tmp/service_account.json"
+}
+gauth.ServiceAuth()
 drive = GoogleDrive(gauth)
 
 def upload_file(file_path):
