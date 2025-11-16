@@ -1,4 +1,4 @@
-name: MLflow CI Advanced
+name: MLflow CI
 
 on:
   push:
@@ -24,6 +24,7 @@ jobs:
 
       - name: Check Env
         run: |
+          echo "User: $(whoami)"
           python --version
           pip --version
           which python
@@ -33,37 +34,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install --no-cache-dir mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client jq docker
 
-            - name: Run MLflow Project
+      - name: Run mlflow project
+        env:
+          # use local mlruns folder in workspace (no 'file://' prefix)
+          MLFLOW_TRACKING_URI: mlruns
         run: |
-          cd MLProject
-          export MLFLOW_TRACKING_URI="mlruns"
-          mlflow run . -P data_path="data/StudentsPerformance_preprocessing.csv" --env-manager local
+          echo "Running MLflow project with env-manager local"
+          mlflow run MLProject -P data_path="data/StudentsPerformance_preprocessing.csv" --env-manager local
 
       - name: Get latest MLflow run_id
         id: get_run
         run: |
-          # Use mlflow runs list; ensure experiment exists
+          echo "Fetching latest run id..."
           RUN_JSON=$(mlflow runs list --experiment-name "Student Performance Prediction" --order-by start_time --max-results 1 --output json || echo "[]")
-          echo "DEBUG: runs list output: $RUN_JSON"
+          echo "DEBUG runs list: $RUN_JSON"
           RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].run_id // empty')
           if [ -z "$RUN_ID" ]; then
-            echo "ERROR: Could not determine RUN_ID. Aborting."
+            echo "ERROR: RUN_ID not found"
             exit 2
           fi
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Found RUN_ID: $RUN_ID"
 
-      - name: Install Python dependencies
-        run: pip install --upgrade pip
+      - name: Install Python dependencies (post-run)
+        run: python -m pip install --upgrade pip
 
-      - name: Check artifact path (debug)
+      - name: Check artifact path (debug & fail early if missing)
         run: |
           ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "DEBUG: checking artifact path: $ART"
-          ls -la mlruns/0 || true
-          ls -la "mlruns/0/${{ env.RUN_ID }}" || true
+          ART=$(python - <<'PY'
+import os,sys
+p=os.path.normpath("mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model")
+print(p)
+PY
+)
+          echo "Resolved ART path: $ART"
           if [ ! -e "$ART" ]; then
-            echo "ERROR: artifact path not found: $ART"
+            echo "ERROR: Artifact path does not exist: $ART"
+            echo "Listing mlruns/0:"
+            ls -la mlruns/0 || true
             echo "Listing run folder:"
             ls -la "mlruns/0/${{ env.RUN_ID }}" || true
             exit 3
@@ -73,11 +82,10 @@ jobs:
       - name: Upload to Google Drive
         env:
           GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON }}
-          # optional: set folder id if you want artifacts inside a specific folder
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID || '' }}
         run: |
           ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Uploading artifact path: $ART"
+          echo "Uploading artifact: $ART"
           python MLProject/upload_to_drive.py "$ART"
 
       - name: Build Docker Model
