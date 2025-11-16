@@ -1,4 +1,5 @@
 # MLProject/modelling.py
+
 import os
 import sys
 import argparse
@@ -15,7 +16,7 @@ def fatal(msg):
     sys.exit(2)
 
 # ----------------------------
-# Parse arguments
+# Parse CLI arguments
 # ----------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, required=True)
@@ -23,9 +24,9 @@ parser.add_argument("--experiment_name", type=str, default="Student Performance 
 args = parser.parse_args()
 
 # ----------------------------
-# Fix dataset path handling
-# MLflow already runs in MLProject folder,
-# so data_path must be relative to project root.
+# Fix dataset path
+# MLflow project runs inside MLProject/ directory,
+# so use working directory directly.
 # ----------------------------
 dataset_path = os.path.join(os.getcwd(), args.data_path)
 
@@ -47,40 +48,45 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 # ----------------------------
 # MLflow tracking
+# DO NOT set experiment here (MLflow run CLI sets it)
+# DO NOT start a new run
+# Just attach to active run created by mlflow CLI
 # ----------------------------
-mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "mlruns"))
-mlflow.set_experiment(args.experiment_name)
+active_run = mlflow.active_run()
+if active_run is None:
+    fatal("No active MLflow run found. This script must be run via 'mlflow run'.")
 
-# Note:
-# DO NOT CREATE A NEW RUN HERE.
-# MLflow CLI already creates the run.
-# We attach to it using start_run()
+print(f"INFO: Attached to MLflow run {active_run.info.run_id}")
+
+# autolog OK
+mlflow.sklearn.autolog()
+
 # ----------------------------
-with mlflow.start_run(run_name="training_run"):
-    print(f"INFO: Active run ID = {mlflow.active_run().info.run_id}")
+# Train model
+# ----------------------------
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
 
-    mlflow.sklearn.autolog()
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
+print(f"Accuracy: {accuracy}")
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
 
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+mlflow.log_metric("accuracy", float(accuracy))
 
-    print(f"Accuracy: {accuracy}")
-    mlflow.log_metric("accuracy", float(accuracy))
+# ----------------------------
+# Save model locally
+# ----------------------------
+local_model_path = "model.pkl"
+joblib.dump(model, local_model_path)
+print(f"Saved model → {local_model_path}")
 
-    # ----------------------------
-    # Save model locally (inside project folder)
-    # ----------------------------
-    local_model_path = "model.pkl"
-    joblib.dump(model, local_model_path)
-    print(f"Saved model → {local_model_path}")
+# ----------------------------
+# Log artifact into active MLflow run
+# ----------------------------
+mlflow.log_artifact(local_model_path, artifact_path="random_forest_model")
 
-    # ----------------------------
-    # Log artifact to MLflow
-    # ----------------------------
-    mlflow.log_artifact(local_model_path, artifact_path="random_forest_model")
-    print("Model uploaded to MLflow under artifact_path='random_forest_model'")
-
-print("Training completed and logged to MLflow.")
+print("Model logged as MLflow artifact at 'random_forest_model/'.")
+print("Training completed successfully.")
