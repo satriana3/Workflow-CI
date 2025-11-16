@@ -31,7 +31,6 @@ jobs:
         env:
           # important: use file: scheme and enable run-id env var
           MLFLOW_TRACKING_URI: "file:./mlruns"
-          MLFLOW_ENABLE_RUN_ID_ENV_VAR: "true"
         run: |
           echo "Running MLflow project with env-manager local"
           mlflow run MLProject -e main --env-manager=local --experiment-name "Student Performance Prediction" \
