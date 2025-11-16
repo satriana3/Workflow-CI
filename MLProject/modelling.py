@@ -11,11 +11,13 @@ if __name__ == "__main__":
     parser.add_argument("--data_path")
     args = parser.parse_args()
 
-    # Log experiment
+    # Set tracking
+    mlflow.set_tracking_uri("file:./mlruns")
     mlflow.set_experiment("Student Performance Prediction")
 
-    # Start run (FIX: nested=True)
-    with mlflow.start_run(nested=True) as run:
+    # FIX BESAR: tidak boleh nested run
+    with mlflow.start_run(run_name="training_run"):
+
         df = pd.read_csv(args.data_path)
 
         X = df.drop("performance_level", axis=1)
@@ -35,11 +37,9 @@ if __name__ == "__main__":
         print(classification_report(y_test, preds))
 
         mlflow.log_metric("accuracy", acc)
-        mlflow.sklearn.log_model(model, "model")
+        mlflow.sklearn.log_model(model, "random_forest_model")
 
         mlflow.log_artifact(args.data_path)
 
         mlflow.log_param("test_size", 0.2)
         mlflow.log_param("model_type", "RandomForestClassifier")
-
-        print("Saved ML model locally at: ml_local_model")
