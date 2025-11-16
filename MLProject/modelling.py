@@ -7,42 +7,41 @@ from sklearn.metrics import accuracy_score, classification_report
 import mlflow
 import mlflow.sklearn
 
-# -------------------------------------------------------
+# -------------------------------
 # Argument parsing untuk MLflow CLI
-# -------------------------------------------------------
+# -------------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, required=True)
 args = parser.parse_args()
 
-# -------------------------------------------------------
+# -------------------------------
 # Load dataset
-# -------------------------------------------------------
+# -------------------------------
 df = pd.read_csv(args.data_path)
 
-# Pastikan kolom sesuai dataset Anda
-# Target: average_score_binned
-# Feature drop: average_score
+# Pastikan kolom sesuai dataset
 X = df.drop(["average_score_binned", "average_score"], axis=1)
 y = df["average_score_binned"]
 
-# -------------------------------------------------------
+# -------------------------------
 # Split data
-# -------------------------------------------------------
+# -------------------------------
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# -------------------------------------------------------
+# -------------------------------
 # MLflow setup
-# -------------------------------------------------------
+# -------------------------------
 mlflow.set_experiment("Student Performance Prediction")
 
 with mlflow.start_run():
+    # Autolog metrics, params, model
     mlflow.sklearn.autolog()
 
-    # ---------------------------------------------------
+    # ---------------------------
     # Train model
-    # ---------------------------------------------------
+    # ---------------------------
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
@@ -58,7 +57,7 @@ with mlflow.start_run():
     # Manual log
     mlflow.log_metric("accuracy", accuracy)
 
-    # Log model
-    mlflow.sklearn.log_model(model, "random_forest_model")
+    # Log model ke folder artifact yang pasti
+    mlflow.sklearn.log_model(model, artifact_path="random_forest_model")
 
     print("Model and metrics logged to MLflow successfully.")
