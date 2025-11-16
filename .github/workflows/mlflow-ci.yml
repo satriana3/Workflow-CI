@@ -12,89 +12,66 @@ jobs:
 
     steps:
       - name: Set up job
-        run: echo "Starting MLflow CI job..."
+        run: echo "Starting CI job..."
 
-      - name: Run actions/checkout@v3
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Python 3.12.7
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.12.7
+          python-version: "3.12.7"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir \
-            mlflow==2.19.0 pandas scikit-learn pydrive2 \
-            google-api-python-client jq docker joblib
+          pip install mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client docker joblib
 
-      - name: Run mlflow project
-        working-directory: MLProject
+      - name: Run MLflow project
         env:
-          # force MLflow to write mlruns at repo root (absolute) so subsequent steps can find it
-          MLFLOW_TRACKING_URI: "${{ github.workspace }}/mlruns"
+          MLFLOW_TRACKING_URI: mlruns
         run: |
-          echo "Running MLflow project with env-manager local (tracking -> $MLFLOW_TRACKING_URI)"
-          mlflow run . \
-            --env-manager local \
+          echo "Running MLflow project with env-manager local"
+          mlflow run MLProject -e main --experiment-name "Student Performance Prediction" \
             -P data_path=data/StudentsPerformance_preprocessing.csv
 
       - name: Get latest MLflow run_id
         id: get_run
         run: |
-          echo "Fetching latest run id from mlruns directory..."
-          # prefer repo-root mlruns, fallback to MLProject/mlruns
-          ROOT_MLRUNS="$(pwd)/mlruns/0"
-          PROJECT_MLRUNS="$(pwd)/MLProject/mlruns/0"
-
-          echo "DEBUG: checking $ROOT_MLRUNS"
-          if [ -d "$ROOT_MLRUNS" ]; then
-            EXP_DIR="$ROOT_MLRUNS"
-          elif [ -d "$PROJECT_MLRUNS" ]; then
-            echo "DEBUG: root mlruns missing; found project mlruns at $PROJECT_MLRUNS"
-            EXP_DIR="$PROJECT_MLRUNS"
-          else
-            echo "ERROR: MLflow experiment directory not found in either $ROOT_MLRUNS or $PROJECT_MLRUNS"
-            echo "Listing repository:"
-            ls -la || true
+          EXP_DIR="mlruns/0"
+          if [ ! -d "$EXP_DIR" ]; then
+            echo "ERROR: mlruns folder not found!"
             exit 1
           fi
 
-          echo "Using experiment dir: $EXP_DIR"
-          # get newest run id by modification time
-          RUN_ID=$(ls -t "$EXP_DIR" | head -n 1)
-          if [ -z "$RUN_ID" ]; then
-            echo "ERROR: No run id found in $EXP_DIR"
-            exit 2
-          fi
+          RUN_ID=$(ls -t mlruns/0 | head -n 1)
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-          echo "Found RUN_ID: $RUN_ID"
+          echo "Latest run_id: $RUN_ID"
 
-      - name: Verify artifact exists
+      - name: Check artifact path
         run: |
-          ART="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
+          ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
           echo "Artifact path: $ART"
 
-          if [ ! -e "$ART" ]; then
-            echo "ERROR: MLflow artifact NOT FOUND."
-            exit 2
+          if [ ! -d "$ART" ]; then
+            echo "ERROR: Artifact folder not found!"
+            exit 1
           fi
+          echo "Artifact found."
 
-          echo "Artifact OK!"
-
-      - name: Upload to Google Drive
+      - name: Upload to Google Drive (folder A: directory upload)
         env:
           GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON }}
-          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID || '' }}
+          DRIVE_FOLDER_ID: "1-kDHpp4yBNSomgiNEZEyDPreZ1myTZOI"
         run: |
-          ART="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          python MLProject/upload_to_drive.py "$ART"
+          ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
+          echo "Uploading directory: $ART"
+          python MLProject/upload_to_drive.py "$ART" "$DRIVE_FOLDER_ID"
 
-      - name: Build Docker Model
+      - name: Build Docker image
         run: |
-          ART_PATH="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          mlflow models build-docker -m "$ART_PATH" -n student-performance-model
+          ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
+          mlflow models build-docker -m "$ART" -n student-performance-model
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -102,11 +79,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Tag Docker Image
+      - name: Tag Docker image
         run: docker tag student-performance-model ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
 
-      - name: Push Docker Image
+      - name: Push Docker image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
 
-      - name: Complete job
-        run: echo "🎉 Workflow completed successfully!"
+      - name: Complete
+        run: echo "CI workflow finished successfully!"
