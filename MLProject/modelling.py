@@ -9,31 +9,32 @@ import argparse
 import os
 import sys
 
+def fatal(msg):
+    print("FATAL: " + msg, file=sys.stderr)
+    sys.exit(2)
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, required=True)
 args = parser.parse_args()
 
-# data path relative to MLProject folder
 dataset_path = os.path.join(os.path.dirname(__file__), args.data_path)
+dataset_path = os.path.normpath(dataset_path)
 
 if not os.path.exists(dataset_path):
-    print(f"ERROR: dataset not found at {dataset_path}", file=sys.stderr)
-    sys.exit(2)
+    fatal(f"Dataset not found at {dataset_path}")
 
 data = pd.read_csv(dataset_path)
 
-# Validate expected columns
 expected_cols = {'average_score_binned', 'average_score'}
 if not expected_cols.issubset(set(data.columns)):
-    print(f"ERROR: dataset missing expected columns. Found: {list(data.columns)}", file=sys.stderr)
-    sys.exit(2)
+    fatal(f"Dataset missing expected columns. Found: {list(data.columns)}")
 
 X = data.drop(['average_score_binned','average_score'], axis=1)
 y = data['average_score_binned']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Use MLflow autolog — mlflow run will open a run and this will log under it
+# Use MLflow autolog (mlflow run will create the run)
 mlflow.sklearn.autolog()
 
 model = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -47,10 +48,7 @@ print(f"Accuracy: {accuracy}")
 print("Classification Report:")
 print(report)
 
-# log metric explicitly (autolog will also log params/metrics)
 mlflow.log_metric("accuracy", float(accuracy))
-
-# log model artifact (this creates artifacts/random_forest_model in run)
 mlflow.sklearn.log_model(model, "random_forest_model")
 
 print("Model and metrics logged to MLflow")
