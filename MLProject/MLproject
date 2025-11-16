@@ -1,11 +1,7 @@
 name: student_performance_project
 
-# Disable auto system-managed run
-env_vars:
-  MLFLOW_ENABLE_SYSTEM_MANAGED_RUNS: "false"
-
 entry_points:
   main:
     parameters:
-      data_path: {type: str, default: "data/StudentsPerformance_preprocessing.csv"}
+      data_path: {type: str}
     command: "python modelling.py --data_path {data_path}"
