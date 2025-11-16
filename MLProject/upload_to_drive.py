@@ -1,19 +1,14 @@
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
-import json
-import sys
 import os
+import sys
 
 artifact_path = sys.argv[1]
-service_account_json = sys.argv[2]
 
-# simpan JSON ke file sementara
-with open("/tmp/service_account.json", "w") as f:
-    f.write(service_account_json)
-
+# Autentikasi dengan metode local webserver
+# GitHub Actions akan menggunakan OAuth2 flow otomatis
 gauth = GoogleAuth()
-gauth.credentials = None
-gauth.ServiceAuth(settings_file="/tmp/service_account.json")
+gauth.LocalWebserverAuth()  # akan membuka token OAuth2 di runtime
 drive = GoogleDrive(gauth)
 
 def upload_file(file_path):
