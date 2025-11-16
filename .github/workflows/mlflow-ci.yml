@@ -37,14 +37,14 @@ jobs:
       - name: Get latest MLflow run_id dynamically
         id: get_run
         run: |
-          # Cari experiment folder terbaru (biasanya 0 jika baru)
+          # Ambil experiment folder terbaru (dynamic)
           EXP_DIR=$(ls -td "${GITHUB_WORKSPACE}/MLProject/mlruns"/* | head -n 1)
           echo "Experiment folder: $EXP_DIR"
-          
-          # Ambil run_id terbaru di experiment folder
+
+          # Ambil run_id terbaru
           RUN_ID=$(ls -td "$EXP_DIR"/* | head -n 1 | xargs -n 1 basename)
           echo "Latest run_id: $RUN_ID"
-          
+
           # Export ke environment
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "EXP_DIR=$EXP_DIR" >> $GITHUB_ENV
@@ -52,9 +52,9 @@ jobs:
       - name: Check artifact path
         run: |
           ART="${EXP_DIR}/${RUN_ID}/artifacts/random_forest_model"
-          echo "Expected artifact path: $ART"
+          echo "Checking artifact path: $ART"
           
-          echo "Listing run folder:"
+          echo "Listing run folder contents:"
           ls -R "${EXP_DIR}/${RUN_ID}"
           
           if [ ! -d "$ART" ]; then
@@ -62,7 +62,6 @@ jobs:
             exit 1
           fi
           echo "Artifact found."
-
 
       - name: Upload to Google Drive
         env:
