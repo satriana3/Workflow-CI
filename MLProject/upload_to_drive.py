@@ -1,9 +1,8 @@
-# MLProject/upload_to_drive.py  (final, recursive, supports service account)
 import os
 import sys
-import json
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
+import json
 
 def fatal(msg):
     print("FATAL: " + msg, file=sys.stderr)
@@ -18,32 +17,28 @@ parent_folder_id = sys.argv[2]
 if not os.path.exists(local_root):
     fatal(f"Local path not found: {local_root}")
 
-# write service account JSON to file
+# Write service account JSON to file
 sa_json = os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON")
 if not sa_json:
     fatal("Missing GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON secret")
 
 service_json_path = "/tmp/service_account.json"
 with open(service_json_path, "w") as f:
-    f.write(sa_json)
+    # Pastikan format JSON valid
+    f.write(json.dumps(json.loads(sa_json)))
 
-# prepare pydrive settings via GoogleAuth using service account
+# Authenticate using service account
 gauth = GoogleAuth()
-gauth.service_account_json = service_json_path
-try:
-    gauth.ServiceAuth()
-except Exception as e:
-    fatal(f"ServiceAuth failed: {e}")
-
+gauth.ServiceAuth(service_json=service_json_path)
 drive = GoogleDrive(gauth)
 
+# Helper functions
 def create_folder(name, parent_id):
     md = {
         "title": name,
         "mimeType": "application/vnd.google-apps.folder",
         "parents": [{"id": parent_id}]
     }
-    # supportsAllDrives True to be safe
     f = drive.CreateFile(md)
     f.Upload()
     return f["id"]
@@ -58,7 +53,6 @@ def upload_file(path, parent_id):
 
 def upload_dir(local_dir, parent_id):
     base = os.path.basename(local_dir.rstrip(os.sep))
-    # create folder under parent
     folder_id = create_folder(base, parent_id)
     for entry in sorted(os.listdir(local_dir)):
         ep = os.path.join(local_dir, entry)
@@ -67,6 +61,6 @@ def upload_dir(local_dir, parent_id):
         else:
             upload_file(ep, folder_id)
 
-# start upload (create a top-level folder inside destination)
+# Start upload
 upload_dir(local_root, parent_folder_id)
 print("Upload finished.")
