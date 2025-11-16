@@ -34,13 +34,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install --no-cache-dir mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client jq docker joblib
 
-      - name: Run mlflow project
+      - name: Run training script (python — deterministic run)
         env:
           # use local mlruns folder in workspace
           MLFLOW_TRACKING_URI: mlruns
         run: |
-          echo "Running MLflow project with env-manager local"
-          mlflow run MLProject -P data_path="data/StudentsPerformance_preprocessing.csv" --env-manager local
+          echo "Running training script directly (not 'mlflow run')"
+          python MLProject/modelling.py --data_path "MLProject/data/StudentsPerformance_preprocessing.csv"
 
       - name: Get latest MLflow run_id
         id: get_run
