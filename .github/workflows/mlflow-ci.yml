@@ -11,9 +11,6 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - name: Set up job
-        run: echo "Starting CI job..."
-
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -32,58 +29,39 @@ jobs:
         env:
           MLFLOW_TRACKING_URI: "file:./mlruns"
         run: |
-          echo "Running MLflow project (working-directory=MLProject)"
+          echo "Running MLflow project"
           mlflow run . --env-manager=local \
             --experiment-name "Student Performance Prediction" \
             -P data_path=data/StudentsPerformance_preprocessing.csv
 
-
-
       - name: Get latest MLflow run_id
         id: get_run
         run: |
-          EXP_DIR="mlruns/0"
-          echo "Looking for experiment directory $EXP_DIR"
-
-          if [ ! -d "$EXP_DIR" ]; then
-            echo "ERROR: Experiment directory not found!"
-            exit 1
-          fi
-
+          EXP_DIR="MLProject/mlruns/0"
           RUN_ID=$(ls -t "$EXP_DIR" | head -n 1)
-
-          if [ -z "$RUN_ID" ]; then
-            echo "ERROR: No run ID found"
-            exit 1
-          fi
-
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Latest run_id: $RUN_ID"
 
       - name: Check artifact path
         run: |
-          ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Checking artifact: $ART"
-
+          ART="MLProject/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
           if [ ! -d "$ART" ]; then
             echo "ERROR: Artifact folder not found!"
             exit 1
           fi
-
-          echo "Artifact found successfully."
+          echo "Artifact found."
 
       - name: Upload to Google Drive
         env:
           GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON }}
           DRIVE_FOLDER_ID: "1-kDHpp4yBNSomgiNEZEyDPreZ1myTZOI"
         run: |
-          ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Uploading directory: $ART"
+          ART="MLProject/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
           python MLProject/upload_to_drive.py "$ART" "$DRIVE_FOLDER_ID"
 
       - name: Build Docker image
         run: |
-          ART="mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
+          ART="MLProject/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
           mlflow models build-docker -m "$ART" -n student-performance-model
 
       - name: Log in to Docker Hub
