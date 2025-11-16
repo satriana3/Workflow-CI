@@ -1,8 +1,8 @@
 import os
 import sys
+import json
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
-import json
 
 def fatal(msg):
     print("FATAL: " + msg, file=sys.stderr)
@@ -17,19 +17,20 @@ parent_folder_id = sys.argv[2]
 if not os.path.exists(local_root):
     fatal(f"Local path not found: {local_root}")
 
-# Write service account JSON to file
+# Tulis service account JSON ke file
 sa_json = os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON")
 if not sa_json:
     fatal("Missing GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON secret")
 
 service_json_path = "/tmp/service_account.json"
 with open(service_json_path, "w") as f:
-    # Pastikan format JSON valid
+    # pastikan format JSON valid
     f.write(json.dumps(json.loads(sa_json)))
 
-# Authenticate using service account
+# Authenticate
 gauth = GoogleAuth()
-gauth.ServiceAuth(service_json=service_json_path)
+gauth.settings['client_config_file'] = service_json_path
+gauth.ServiceAuth()  # <--- tidak ada argumen di sini
 drive = GoogleDrive(gauth)
 
 # Helper functions
