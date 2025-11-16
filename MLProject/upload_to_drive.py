@@ -1,49 +1,72 @@
+# MLProject/upload_to_drive.py  (final, recursive, supports service account)
 import os
 import sys
 import json
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
-if len(sys.argv) < 3:
-    print("Usage: python upload_to_drive.py <local_folder> <drive_folder_id>")
+def fatal(msg):
+    print("FATAL: " + msg, file=sys.stderr)
     sys.exit(1)
 
-local_path = sys.argv[1]
+if len(sys.argv) < 3:
+    fatal("Usage: python upload_to_drive.py <local_folder> <drive_folder_id>")
+
+local_root = os.path.normpath(sys.argv[1])
 parent_folder_id = sys.argv[2]
 
-if not os.path.exists(local_path):
-    print(f"ERROR: Local path not found: {local_path}")
-    sys.exit(1)
+if not os.path.exists(local_root):
+    fatal(f"Local path not found: {local_root}")
 
-# Authenticate service account
+# write service account JSON to file
+sa_json = os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON")
+if not sa_json:
+    fatal("Missing GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON secret")
+
+service_json_path = "/tmp/service_account.json"
+with open(service_json_path, "w") as f:
+    f.write(sa_json)
+
+# prepare pydrive settings via GoogleAuth using service account
 gauth = GoogleAuth()
-gauth.service_account_json = "service_account.json"
+gauth.service_account_json = service_json_path
+try:
+    gauth.ServiceAuth()
+except Exception as e:
+    fatal(f"ServiceAuth failed: {e}")
 
-with open("service_account.json", "w") as f:
-    f.write(os.environ["GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON"])
-
-gauth.ServiceAuth()
 drive = GoogleDrive(gauth)
 
-def upload_file(local_file, parent_id):
-    file_name = os.path.basename(local_file)
-    f = drive.CreateFile({"title": file_name, "parents": [{"id": parent_id}]})
-    f.SetContentFile(local_file)
+def create_folder(name, parent_id):
+    md = {
+        "title": name,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [{"id": parent_id}]
+    }
+    # supportsAllDrives True to be safe
+    f = drive.CreateFile(md)
     f.Upload()
-    print(f"Uploaded file: {local_file}")
     return f["id"]
 
-def upload_folder(local_folder, parent_id):
-    folder_name = os.path.basename(local_folder)
-    folder = drive.CreateFile({"title": folder_name, "mimeType": "application/vnd.google-apps.folder",
-                               "parents": [{"id": parent_id}]})
-    folder.Upload()
-    folder_id = folder["id"]
-    print(f"Created folder: {folder_name}, id={folder_id}")
+def upload_file(path, parent_id):
+    fname = os.path.basename(path)
+    meta = {"title": fname, "parents": [{"id": parent_id}]}
+    f = drive.CreateFile(meta)
+    f.SetContentFile(path)
+    f.Upload()
+    print(f"Uploaded file: {path} -> {fname}")
 
-    for root, dirs, files in os.walk(local_folder):
-        for file in files:
-            upload_file(os.path.join(root, file), folder_id)
+def upload_dir(local_dir, parent_id):
+    base = os.path.basename(local_dir.rstrip(os.sep))
+    # create folder under parent
+    folder_id = create_folder(base, parent_id)
+    for entry in sorted(os.listdir(local_dir)):
+        ep = os.path.join(local_dir, entry)
+        if os.path.isdir(ep):
+            upload_dir(ep, folder_id)
+        else:
+            upload_file(ep, folder_id)
 
-upload_folder(local_path, parent_folder_id)
-print("Upload completed.")
+# start upload (create a top-level folder inside destination)
+upload_dir(local_root, parent_folder_id)
+print("Upload finished.")
