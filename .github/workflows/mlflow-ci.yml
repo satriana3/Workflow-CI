@@ -45,22 +45,21 @@ jobs:
       - name: Get latest MLflow run_id
         id: get_run
         run: |
-          echo "Fetching latest run id..."
-          RUN_JSON=$(mlflow runs list \
-            --experiment-id 0 \
-            --order-by attribute.start_time \
-            --descending \
-            --max-results 1 \
-            --output json || echo "[]")
+          echo "Fetching latest run id from mlruns directory..."
 
-          echo "DEBUG runs list: $RUN_JSON"
+          # MLflow default experiment folder
+          EXPERIMENT_DIR="mlruns/0"
 
-          RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].run_id // empty')
+          if [ ! -d "$EXPERIMENT_DIR" ]; then
+            echo "ERROR: MLflow experiment folder not found!"
+            exit 1
+          fi
+
+          # Ambil run folder terbaru berdasarkan waktu modifikasi
+          RUN_ID=$(ls -t $EXPERIMENT_DIR | head -n 1)
 
           if [ -z "$RUN_ID" ]; then
-            echo "ERROR: RUN_ID not found"
-            echo "List run folder for debugging:"
-            ls -R mlruns || true
+            echo "ERROR: No run id found!"
             exit 2
           fi
 
