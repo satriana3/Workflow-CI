@@ -68,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: student-performance-model
-          path: MLProject/artifacts/random_forest_model
+          path: MLProject/artifacts/random_forest_model/
 
       # 9️ Build Docker Model
       - name: Build Docker Model
