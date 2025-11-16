@@ -19,7 +19,7 @@ y = data['average_score_binned']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Gunakan MLflow autolog saja, tanpa start_run
+# Gunakan MLflow autolog saja
 mlflow.sklearn.autolog()
 
 model = RandomForestClassifier(n_estimators=100, random_state=42)
