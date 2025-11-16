@@ -1,10 +1,9 @@
-# MLProject/modelling.py  (REPLACE existing file with this)
+# MLProject/modelling.py
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 import mlflow
-import mlflow.sklearn
 import argparse
 import os
 import sys
@@ -14,6 +13,9 @@ def fatal(msg):
     print("FATAL: " + msg, file=sys.stderr)
     sys.exit(2)
 
+# ======================
+# Parse argument
+# ======================
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, required=True)
 args = parser.parse_args()
@@ -30,6 +32,9 @@ expected_cols = {'average_score_binned', 'average_score'}
 if not expected_cols.issubset(set(data.columns)):
     fatal(f"Dataset missing expected columns. Found: {list(data.columns)}")
 
+# ======================
+# Prepare data
+# ======================
 X = data.drop(['average_score_binned', 'average_score'], axis=1)
 y = data['average_score_binned']
 
@@ -37,50 +42,62 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# MLflow autolog is OK, but we will explicitly log a stable artifact file too
+# ======================
+# Get ACTIVE RUN from MLflow
+# MLflow CLI already starts run → we must attach to it
+# ======================
+active = mlflow.active_run()
+if active is None:
+    fatal("ERROR: No active MLflow run found (CLI run failed).")
+
+run_id = active.info.run_id
+print(f"Using active MLflow run id: {run_id}")
+
+# Enable autologging (safe)
 mlflow.sklearn.autolog()
 
+# ======================
 # Train model
+# ======================
 model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X_train, y_train)
 
-# Eval
+# Evaluate
 y_pred = model.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
-report = classification_report(y_test, y_pred)
+print("Accuracy:", accuracy)
+print(classification_report(y_test, y_pred))
 
-print(f"Accuracy: {accuracy}")
-print("Classification Report:")
-print(report)
-
-# Log metric explicitly
+# Log metric manually
 mlflow.log_metric("accuracy", float(accuracy))
 
-# === Save model locally and log as artifact to ensure artifact folder exists ===
-local_model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
-joblib.dump(model, local_model_path)
-print(f"Saved local model to: {local_model_path}")
+# ======================
+# FORCE ARTIFACT CREATION
+# ======================
+local_model = os.path.join(os.getcwd(), "model.pkl")
+joblib.dump(model, local_model)
+print(f"Saved model locally at {local_model}")
 
-# log the local file as artifact under 'random_forest_model' artifact folder
-mlflow.log_artifact(local_model_path, artifact_path="random_forest_model")
-print("Uploaded local model file as artifact to artifact_path='random_forest_model'")
+# THIS GUARANTEES artifacts/random_forest_model exists
+mlflow.log_artifact(local_model, artifact_path="random_forest_model")
 
-# For debug: list artifacts dir (relative to mlruns) if env var RUN_ID present
-try:
-    run_id = mlflow.active_run().info.run_id
-    print(f"DEBUG: active run id = {run_id}")
-    run_artifacts_dir = os.path.join(os.getcwd(), "mlruns", "0", run_id, "artifacts")
-    if os.path.exists(run_artifacts_dir):
-        print("DEBUG: listing artifacts directory:")
-        for root, dirs, files in os.walk(run_artifacts_dir):
-            level = root.replace(run_artifacts_dir, "").count(os.sep)
-            indent = " " * 2 * (level)
-            print(f"{indent}{os.path.basename(root)}/")
-            for f in files:
-                print(f"{indent}  - {f}")
-    else:
-        print(f"DEBUG: artifacts dir not found at expected path: {run_artifacts_dir}")
-except Exception as e:
-    print(f"DEBUG: could not print run artifacts: {e}")
+print("Artifact uploaded into: artifacts/random_forest_model")
 
-print("Model and metrics logged to MLflow (and artifact file saved).")
+# ======================
+# DEBUG print artifacts
+# ======================
+artifact_root = os.path.join(
+    os.getcwd(),
+    "mlruns", "0", run_id, "artifacts"
+)
+
+print("DEBUG: listing artifacts root:", artifact_root)
+
+for root, dirs, files in os.walk(artifact_root):
+    level = root.replace(artifact_root, "").count(os.sep)
+    indent = " " * 2 * level
+    print(f"{indent}{os.path.basename(root)}/")
+    for f in files:
+        print(f"{indent}  - {f}")
+
+print("FINISHED: model + artifacts logged successfully.")
