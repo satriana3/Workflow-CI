@@ -98,7 +98,7 @@ if env_run_id:
     # Log artifacts (entire directory) so MLmodel is preserved
     # MlflowClient.log_artifacts(local_dir, run_id, artifact_path=None)
     print(f"Uploading MLflow model directory '{local_model_dir}' as artifacts/random_forest_model ...")
-    client.log_artifacts(local_model_dir, env_run_id, artifact_path="random_forest_model")
+    client.log_artifacts(env_run_id, local_model_dir, artifact_path="random_forest_model")
     print("Artifact upload via MlflowClient complete.")
     used_run_id = env_run_id
 else:
