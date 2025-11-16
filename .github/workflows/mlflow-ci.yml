@@ -10,19 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set up job
-        run: echo "Starting CI job..."
-
-      - name: Run actions/checkout@v3
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python 3.12.7
         uses: actions/setup-python@v4
         with:
           python-version: 3.12.7
-
-      - name: Check Env
-        run: python --version && pip --version
 
       - name: Install dependencies
         run: |
@@ -31,19 +25,12 @@ jobs:
 
       - name: Run MLflow project
         run: |
-          mlflow run MLProject -P data_path="MLProject/studentsperformance_preprocessing/StudentsPerformance_preprocessing.csv"
+          mlflow run MLProject -P data_path="data/StudentsPerformance_preprocessing.csv"
 
       - name: Get latest MLflow run_id
         run: |
           RUN_ID=$(mlflow runs list --experiment-name "Student Performance Prediction" --order-by start_time --max-results 1 --output json | jq -r '.[0].run_id')
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-
-      - name: Install Python dependencies
-        run: pip install --upgrade pip
-
-      - name: Upload to Google Drive
-        run: |
-          echo "Upload step placeholder"  # Tambahkan script upload nanti
 
       - name: Build Docker Model
         run: |
@@ -55,20 +42,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Tag Docker Image
-        run: docker tag student-performance-model ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
-
-      - name: Push Docker Image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
-
-      - name: Post Log in to Docker Hub
-        run: echo "Docker push completed"
-
-      - name: Post Set up Python 3.12.7
-        run: echo "Python 3.12.7 setup completed"
-
-      - name: Post Run actions/checkout@v3
-        run: echo "Checkout cleanup completed"
-
-      - name: Complete job
-        run: echo "CI workflow finished successfully!"
+      - name: Tag and Push Docker Image
+        run: |
+          docker tag student-performance-model ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
