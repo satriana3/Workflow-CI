@@ -21,7 +21,8 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 
 mlflow.set_experiment("Student Performance Prediction")
 
-with mlflow.start_run():
+# Gunakan nested=True agar tidak konflik dengan run dari CLI
+with mlflow.start_run(nested=True):
     mlflow.sklearn.autolog()
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
