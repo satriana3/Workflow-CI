@@ -43,10 +43,8 @@ jobs:
         run: pip install --upgrade pip
 
       - name: Upload to Google Drive
-        env:
-          GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
         run: |
-          python MLProject/upload_to_drive.py "mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model" "$GOOGLE_DRIVE_CREDENTIALS"
+          python MLProject/upload_to_drive.py "mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
 
       - name: Build Docker Model
         run: |
