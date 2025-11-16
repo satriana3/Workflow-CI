@@ -1,4 +1,8 @@
 name: student_performance_project
+
+env_vars:
+  MLFLOW_ENABLE_SYSTEM_MANAGED_RUNS: "false"
+
 entry_points:
   main:
     parameters:
