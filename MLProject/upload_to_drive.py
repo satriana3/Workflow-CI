@@ -1,93 +1,49 @@
-# MLProject/upload_to_drive.py
 import os
 import sys
+import json
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
-def fatal(msg):
-    print("FATAL: " + msg, file=sys.stderr)
+if len(sys.argv) < 3:
+    print("Usage: python upload_to_drive.py <local_folder> <drive_folder_id>")
     sys.exit(1)
 
-if len(sys.argv) < 2:
-    fatal("Usage: upload_to_drive.py <artifact_path>")
+local_path = sys.argv[1]
+parent_folder_id = sys.argv[2]
 
-artifact_path = sys.argv[1]
-artifact_path = os.path.normpath(artifact_path)
-print(f"DEBUG: artifact_path -> {artifact_path}")
+if not os.path.exists(local_path):
+    print(f"ERROR: Local path not found: {local_path}")
+    sys.exit(1)
 
-service_account_json = os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON")
-if not service_account_json:
-    fatal("Missing env var GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (set it as GitHub Secret)")
+# Authenticate service account
+gauth = GoogleAuth()
+gauth.service_account_json = "service_account.json"
 
-dest_folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")  # optional
+with open("service_account.json", "w") as f:
+    f.write(os.environ["GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON"])
 
-# write service account json to temp file
-service_json_path = "/tmp/service_account.json"
-with open(service_json_path, "w") as f:
-    f.write(service_account_json)
-
-# write pydrive2 settings yaml
-settings_yaml = f"""
-client_config_backend: service
-service_config:
-  client_json_file_path: "{service_json_path}"
-"""
-settings_path = "/tmp/settings.yaml"
-with open(settings_path, "w") as f:
-    f.write(settings_yaml)
-
-# verify artifact exists
-if not os.path.exists(artifact_path):
-    fatal(f"Artifact path not found: {artifact_path}")
-
-# authenticate
-gauth = GoogleAuth(settings_path)
-try:
-    gauth.ServiceAuth()
-except Exception as e:
-    fatal(f"ServiceAuth failed: {e}")
-
+gauth.ServiceAuth()
 drive = GoogleDrive(gauth)
 
-def upload_file(local_path, parent_id=None):
-    fname = os.path.basename(local_path)
-    metadata = {'title': fname}
-    if parent_id:
-        metadata['parents'] = [{'id': parent_id}]
-    f = drive.CreateFile(metadata)
-    f.SetContentFile(local_path)
+def upload_file(local_file, parent_id):
+    file_name = os.path.basename(local_file)
+    f = drive.CreateFile({"title": file_name, "parents": [{"id": parent_id}]})
+    f.SetContentFile(local_file)
     f.Upload()
-    print(f"Uploaded file: {local_path} -> {fname} (parent={parent_id})")
+    print(f"Uploaded file: {local_file}")
+    return f["id"]
 
-def create_folder_and_get_id(folder_name, parent_id=None):
-    md = {'title': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
-    if parent_id:
-        md['parents'] = [{'id': parent_id}]
-    folder = drive.CreateFile(md)
+def upload_folder(local_folder, parent_id):
+    folder_name = os.path.basename(local_folder)
+    folder = drive.CreateFile({"title": folder_name, "mimeType": "application/vnd.google-apps.folder",
+                               "parents": [{"id": parent_id}]})
     folder.Upload()
-    return folder['id']
+    folder_id = folder["id"]
+    print(f"Created folder: {folder_name}, id={folder_id}")
 
-def upload_dir(local_dir, parent_id=None):
-    base = os.path.basename(local_dir.rstrip(os.sep))
-    if parent_id:
-        folder_id = create_folder_and_get_id(base, parent_id=parent_id)
-    else:
-        folder_id = create_folder_and_get_id(base)
-    print(f"Created folder {base} with id {folder_id}")
-    for entry in sorted(os.listdir(local_dir)):
-        ep = os.path.join(local_dir, entry)
-        if os.path.isdir(ep):
-            upload_dir(ep, parent_id=folder_id)
-        else:
-            upload_file(ep, parent_id=folder_id)
+    for root, dirs, files in os.walk(local_folder):
+        for file in files:
+            upload_file(os.path.join(root, file), folder_id)
 
-# perform upload
-if os.path.isdir(artifact_path):
-    if dest_folder_id:
-        upload_dir(artifact_path, parent_id=dest_folder_id)
-    else:
-        upload_dir(artifact_path, parent_id=None)
-else:
-    upload_file(artifact_path, parent_id=dest_folder_id if dest_folder_id else None)
-
-print("Upload finished.")
+upload_folder(local_path, parent_folder_id)
+print("Upload completed.")
