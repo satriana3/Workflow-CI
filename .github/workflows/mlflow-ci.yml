@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Set up job
-        run: echo "Starting CI job..."
+        run: echo "Starting MLflow CI job..."
 
       - name: Run actions/checkout@v3
         uses: actions/checkout@v3
@@ -22,60 +22,51 @@ jobs:
         with:
           python-version: 3.12.7
 
-      - name: Check Env
-        run: |
-          echo "User: $(whoami)"
-          python --version
-          pip --version
-          which python
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client jq docker joblib
+          pip install --no-cache-dir \
+            mlflow==2.19.0 pandas scikit-learn pydrive2 \
+            google-api-python-client jq docker joblib
 
-      - name: Run training script (python — deterministic run)
-        env:
-          # use local mlruns folder in workspace
-          MLFLOW_TRACKING_URI: mlruns
+      # =======================================
+      #   FIX: Step wajib sesuai Kriteria 3
+      # =======================================
+      - name: Run mlflow project
+        working-directory: MLProject
         run: |
-          echo "Running training script directly (not 'mlflow run')"
-          python MLProject/modelling.py --data_path "MLProject/data/StudentsPerformance_preprocessing.csv"
+          echo "Running MLflow project with env-manager local"
+          mlflow run . \
+            --env-manager local \
+            -P data_path=data/StudentsPerformance_preprocessing.csv
+      # =======================================
 
       - name: Get latest MLflow run_id
         id: get_run
         run: |
           echo "Fetching latest run id from mlruns directory..."
-          EXPERIMENT_DIR="$(pwd)/mlruns/0"
-          echo "DEBUG: experiment dir -> $EXPERIMENT_DIR"
-          if [ ! -d "$EXPERIMENT_DIR" ]; then
-            echo "ERROR: MLflow experiment folder not found!"
+          EXP="$(pwd)/mlruns/0"
+
+          if [ ! -d "$EXP" ]; then
+            echo "ERROR: MLflow experiment directory not found!"
             exit 1
           fi
-          RUN_ID=$(ls -t "$EXPERIMENT_DIR" | head -n 1)
-          if [ -z "$RUN_ID" ]; then
-            echo "ERROR: No run id found!"
-            exit 2
-          fi
+
+          RUN_ID=$(ls -t "$EXP" | head -n 1)
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-          echo "Found RUN_ID: $RUN_ID"
+          echo "Detected RUN_ID: $RUN_ID"
 
-      - name: Install Python dependencies (post-run)
-        run: python -m pip install --upgrade pip
-
-      - name: Check artifact path (debug & fail early if missing)
+      - name: Verify artifact exists
         run: |
           ART="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Resolved ART path: $ART"
-          echo "Listing mlruns/0:"
-          ls -la "$(pwd)/mlruns/0" || true
-          echo "Listing run folder:"
-          ls -la "$(pwd)/mlruns/0/${{ env.RUN_ID }}" || true
+          echo "Artifact path: $ART"
+
           if [ ! -e "$ART" ]; then
-            echo "ERROR: Artifact path does not exist: $ART"
-            exit 3
+            echo "ERROR: MLflow artifact NOT FOUND."
+            exit 2
           fi
-          echo "Artifact exists: $ART"
+
+          echo "Artifact OK!"
 
       - name: Upload to Google Drive
         env:
@@ -83,13 +74,11 @@ jobs:
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID || '' }}
         run: |
           ART="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Uploading artifact: $ART"
           python MLProject/upload_to_drive.py "$ART"
 
       - name: Build Docker Model
         run: |
           ART_PATH="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
-          echo "Building docker image from MLflow model at $ART_PATH"
           mlflow models build-docker -m "$ART_PATH" -n student-performance-model
 
       - name: Log in to Docker Hub
@@ -104,14 +93,5 @@ jobs:
       - name: Push Docker Image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
 
-      - name: Post Log in to Docker Hub
-        run: echo "Docker push completed"
-
-      - name: Post Set up Python 3.12.7
-        run: echo "Python 3.12.7 setup completed"
-
-      - name: Post Run actions/checkout@v3
-        run: echo "Checkout cleanup completed"
-
       - name: Complete job
-        run: echo "CI workflow finished successfully!"
+        run: echo "🎉 Workflow completed successfully!"
