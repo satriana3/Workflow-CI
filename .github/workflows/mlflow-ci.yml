@@ -33,12 +33,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install --no-cache-dir mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client jq docker
 
-      - name: Run mlflow project
-        env:
-          MLFLOW_TRACKING_URI: file://$GITHUB_WORKSPACE/mlruns
+            - name: Run MLflow Project
         run: |
-          echo "Running MLflow project (env-manager local)"
-          mlflow run MLProject -P data_path="data/StudentsPerformance_preprocessing.csv" --env-manager local
+          cd MLProject
+          export MLFLOW_TRACKING_URI="mlruns"
+          mlflow run . -P data_path="data/StudentsPerformance_preprocessing.csv" --env-manager local
 
       - name: Get latest MLflow run_id
         id: get_run
