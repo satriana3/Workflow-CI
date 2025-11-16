@@ -1,4 +1,4 @@
-name: MLflow CI 
+name: MLflow CI
 
 on:
   push:
@@ -32,11 +32,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client jq docker
+          pip install --no-cache-dir mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client jq docker joblib
 
       - name: Run mlflow project
         env:
-          # local mlruns folder inside workspace
+          # use local mlruns folder in workspace
           MLFLOW_TRACKING_URI: mlruns
         run: |
           echo "Running MLflow project with env-manager local"
@@ -46,23 +46,17 @@ jobs:
         id: get_run
         run: |
           echo "Fetching latest run id from mlruns directory..."
-
-          # MLflow default experiment folder
-          EXPERIMENT_DIR="mlruns/0"
-
+          EXPERIMENT_DIR="$(pwd)/mlruns/0"
+          echo "DEBUG: experiment dir -> $EXPERIMENT_DIR"
           if [ ! -d "$EXPERIMENT_DIR" ]; then
             echo "ERROR: MLflow experiment folder not found!"
             exit 1
           fi
-
-          # Ambil run folder terbaru berdasarkan waktu modifikasi
-          RUN_ID=$(ls -t $EXPERIMENT_DIR | head -n 1)
-
+          RUN_ID=$(ls -t "$EXPERIMENT_DIR" | head -n 1)
           if [ -z "$RUN_ID" ]; then
             echo "ERROR: No run id found!"
             exit 2
           fi
-
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Found RUN_ID: $RUN_ID"
 
@@ -71,7 +65,6 @@ jobs:
 
       - name: Check artifact path (debug & fail early if missing)
         run: |
-          # resolve artifact path and check
           ART="$(pwd)/mlruns/0/${{ env.RUN_ID }}/artifacts/random_forest_model"
           echo "Resolved ART path: $ART"
           echo "Listing mlruns/0:"
