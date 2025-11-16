@@ -5,12 +5,13 @@ from sklearn.metrics import accuracy_score, classification_report
 import mlflow
 import mlflow.sklearn
 import argparse
+import os
 
 # parsing argumen
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, required=True)
 args = parser.parse_args()
-dataset_path = args.data_path
+dataset_path = os.path.join(os.path.dirname(__file__), args.data_path)
 
 # load dataset
 data = pd.read_csv(dataset_path)
