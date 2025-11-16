@@ -59,7 +59,7 @@ jobs:
           fi
           echo "Artifact found."
 
-      - name: Upload to Google Drive (folder A: directory upload)
+      - name: Upload to Google Drive
         env:
           GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON }}
           DRIVE_FOLDER_ID: "1-kDHpp4yBNSomgiNEZEyDPreZ1myTZOI"
