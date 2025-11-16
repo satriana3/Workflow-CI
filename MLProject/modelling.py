@@ -36,7 +36,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# MLflow automatically starts a run when running via `mlflow run`
+# Enable autolog
 mlflow.sklearn.autolog()
 
 model = RandomForestClassifier(n_estimators=100, random_state=42)
@@ -50,8 +50,10 @@ print(f"Accuracy: {accuracy}")
 print("Classification Report:")
 print(report)
 
-# explicit logging still allowed
+# Log metric manually (safe even with autolog)
 mlflow.log_metric("accuracy", float(accuracy))
-mlflow.sklearn.log_model(model, "random_forest_model")
+
+# === FIX: ensure artifact path exists for GitHub Actions ===
+mlflow.sklearn.log_model(model, artifact_path="random_forest_model")
 
 print("Model and metrics logged to MLflow")
