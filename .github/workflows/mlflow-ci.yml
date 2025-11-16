@@ -28,14 +28,15 @@ jobs:
           pip install mlflow==2.19.0 pandas scikit-learn pydrive2 google-api-python-client docker joblib
 
       - name: Run MLflow project
+        working-directory: MLProject
         env:
           MLFLOW_TRACKING_URI: "file:./mlruns"
         run: |
-          echo "Running MLflow project"
-          mlflow run . \
-            --env-manager=local \
+          echo "Running MLflow project (working-directory=MLProject)"
+          mlflow run . --env-manager=local \
             --experiment-name "Student Performance Prediction" \
             -P data_path=data/StudentsPerformance_preprocessing.csv
+
 
 
       - name: Get latest MLflow run_id
