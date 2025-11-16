@@ -46,13 +46,24 @@ jobs:
         id: get_run
         run: |
           echo "Fetching latest run id..."
-          RUN_JSON=$(mlflow runs list --experiment-name "Student Performance Prediction" --order-by start_time --max-results 1 --output json || echo "[]")
+          RUN_JSON=$(mlflow runs list \
+            --experiment-id 0 \
+            --order-by attribute.start_time \
+            --descending \
+            --max-results 1 \
+            --output json || echo "[]")
+
           echo "DEBUG runs list: $RUN_JSON"
+
           RUN_ID=$(echo "$RUN_JSON" | jq -r '.[0].run_id // empty')
+
           if [ -z "$RUN_ID" ]; then
             echo "ERROR: RUN_ID not found"
+            echo "List run folder for debugging:"
+            ls -R mlruns || true
             exit 2
           fi
+
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Found RUN_ID: $RUN_ID"
 
