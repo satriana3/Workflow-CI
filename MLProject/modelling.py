@@ -1,47 +1,58 @@
 import mlflow
 import mlflow.sklearn
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, accuracy_score
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, accuracy_score
+import argparse
+import os
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path")
-    args = parser.parse_args()
+# Arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--data_path", type=str, required=True)
+args = parser.parse_args()
 
-    # Tracking local file store
-    mlflow.set_tracking_uri("file:./mlruns")
-    mlflow.set_experiment("Student Performance Prediction")
+# Set experiment
+mlflow.set_experiment("Student Performance Prediction")
 
-    # Start SINGLE RUN — no nested!
-    with mlflow.start_run(run_name="training_run"):
-        df = pd.read_csv(args.data_path)
+# Start run normally (do NOT attach to MLflow run ID)
+with mlflow.start_run(run_name="training_run"):
+    
+    # Load data
+    df = pd.read_csv(args.data_path)
 
-        X = df.drop("performance_level", axis=1)
-        y = df["performance_level"]
+    # Encode target
+    le = LabelEncoder()
+    df['performance'] = le.fit_transform(df['performance'])
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+    # Train test split
+    X = df.drop("performance", axis=1)
+    y = df["performance"]
 
-        model = RandomForestClassifier(random_state=42)
-        model.fit(X_train, y_train)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-        preds = model.predict(X_test)
-        acc = accuracy_score(y_test, preds)
+    # Model
+    model = RandomForestClassifier()
+    model.fit(X_train, y_train)
 
-        print("Accuracy:", acc)
-        print(classification_report(y_test, preds))
+    # Predict
+    y_pred = model.predict(X_test)
 
-        # Log metrics and model
-        mlflow.log_metric("accuracy", acc)
-        mlflow.sklearn.log_model(model, "random_forest_model")
+    # Metrics
+    acc = accuracy_score(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
 
-        # Log artifact
-        mlflow.log_artifact(args.data_path)
+    print("Accuracy:", acc)
+    print("Classification Report:\n", report)
 
-        # Params
-        mlflow.log_param("test_size", 0.2)
-        mlflow.log_param("model_type", "RandomForestClassifier")
+    # Log metrics
+    mlflow.log_metric("accuracy", acc)
+    
+    # Log model
+    mlflow.sklearn.log_model(model, artifact_path="model")
+
+    # Save local
+    output_path = "ml_local_model"
+    mlflow.sklearn.save_model(model, output_path)
+    print("Saved MLflow-format model locally at:", os.path.abspath(output_path))
