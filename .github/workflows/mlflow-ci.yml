@@ -29,32 +29,47 @@ jobs:
             mlflow==2.19.0 pandas scikit-learn pydrive2 \
             google-api-python-client jq docker joblib
 
-      # =======================================
-      #   FIX: Step wajib sesuai Kriteria 3
-      # =======================================
       - name: Run mlflow project
         working-directory: MLProject
+        env:
+          # force MLflow to write mlruns at repo root (absolute) so subsequent steps can find it
+          MLFLOW_TRACKING_URI: "${{ github.workspace }}/mlruns"
         run: |
-          echo "Running MLflow project with env-manager local"
+          echo "Running MLflow project with env-manager local (tracking -> $MLFLOW_TRACKING_URI)"
           mlflow run . \
             --env-manager local \
             -P data_path=data/StudentsPerformance_preprocessing.csv
-      # =======================================
 
       - name: Get latest MLflow run_id
         id: get_run
         run: |
           echo "Fetching latest run id from mlruns directory..."
-          EXP="$(pwd)/mlruns/0"
+          # prefer repo-root mlruns, fallback to MLProject/mlruns
+          ROOT_MLRUNS="$(pwd)/mlruns/0"
+          PROJECT_MLRUNS="$(pwd)/MLProject/mlruns/0"
 
-          if [ ! -d "$EXP" ]; then
-            echo "ERROR: MLflow experiment directory not found!"
+          echo "DEBUG: checking $ROOT_MLRUNS"
+          if [ -d "$ROOT_MLRUNS" ]; then
+            EXP_DIR="$ROOT_MLRUNS"
+          elif [ -d "$PROJECT_MLRUNS" ]; then
+            echo "DEBUG: root mlruns missing; found project mlruns at $PROJECT_MLRUNS"
+            EXP_DIR="$PROJECT_MLRUNS"
+          else
+            echo "ERROR: MLflow experiment directory not found in either $ROOT_MLRUNS or $PROJECT_MLRUNS"
+            echo "Listing repository:"
+            ls -la || true
             exit 1
           fi
 
-          RUN_ID=$(ls -t "$EXP" | head -n 1)
+          echo "Using experiment dir: $EXP_DIR"
+          # get newest run id by modification time
+          RUN_ID=$(ls -t "$EXP_DIR" | head -n 1)
+          if [ -z "$RUN_ID" ]; then
+            echo "ERROR: No run id found in $EXP_DIR"
+            exit 2
+          fi
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-          echo "Detected RUN_ID: $RUN_ID"
+          echo "Found RUN_ID: $RUN_ID"
 
       - name: Verify artifact exists
         run: |
