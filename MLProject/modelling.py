@@ -11,13 +11,12 @@ if __name__ == "__main__":
     parser.add_argument("--data_path")
     args = parser.parse_args()
 
-    # Set tracking
+    # Tracking local file store
     mlflow.set_tracking_uri("file:./mlruns")
     mlflow.set_experiment("Student Performance Prediction")
 
-    # FIX BESAR: tidak boleh nested run
+    # Start SINGLE RUN — no nested!
     with mlflow.start_run(run_name="training_run"):
-
         df = pd.read_csv(args.data_path)
 
         X = df.drop("performance_level", axis=1)
@@ -36,10 +35,13 @@ if __name__ == "__main__":
         print("Accuracy:", acc)
         print(classification_report(y_test, preds))
 
+        # Log metrics and model
         mlflow.log_metric("accuracy", acc)
         mlflow.sklearn.log_model(model, "random_forest_model")
 
+        # Log artifact
         mlflow.log_artifact(args.data_path)
 
+        # Params
         mlflow.log_param("test_size", 0.2)
         mlflow.log_param("model_type", "RandomForestClassifier")
