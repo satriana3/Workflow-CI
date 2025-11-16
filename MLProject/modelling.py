@@ -7,23 +7,18 @@ import mlflow.sklearn
 import argparse
 import os
 
-# parsing argumen
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_path", type=str, required=True)
 args = parser.parse_args()
 dataset_path = os.path.join(os.path.dirname(__file__), args.data_path)
 
-# load dataset
 data = pd.read_csv(dataset_path)
 
-# pisahkan fitur dan target
 X = data.drop(['average_score_binned','average_score'], axis=1)
 y = data['average_score_binned']
 
-# bagi data menjadi training dan testing set
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# konfigurasikan MLflow
 mlflow.set_experiment("Student Performance Prediction")
 
 with mlflow.start_run():
