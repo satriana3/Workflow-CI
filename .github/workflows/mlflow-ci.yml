@@ -56,9 +56,10 @@ jobs:
       - name: Get latest MLflow run_id
         run: |
           EXP_DIR="${GITHUB_WORKSPACE}/MLProject/mlruns/0"
-          RUN_ID=$(ls -t "$EXP_DIR" | head -n 1)
+          RUN_ID=$(ls -dt ${EXP_DIR}/*/ | head -n 1 | xargs basename)
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Latest MLflow run_id = $RUN_ID"
+
 
       - name: Zip MLflow mlruns folder
         run: |
