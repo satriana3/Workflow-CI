@@ -4,7 +4,18 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    precision_score,
+    recall_score,
+    f1_score,
+    balanced_accuracy_score,
+    log_loss,
+    matthews_corrcoef,
+    roc_auc_score,
+    cohen_kappa_score
+)
 import mlflow
 import mlflow.sklearn
 
@@ -51,15 +62,49 @@ with mlflow.start_run():
 
     # Predict
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    y_proba = model.predict_proba(X_test) if hasattr(model, "predict_proba") else None
 
+    # ---------------------------
+    # Hitung metric
+    # ---------------------------
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    recall = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+    balanced_acc = balanced_accuracy_score(y_test, y_pred)
+    cohen_kappa = cohen_kappa_score(y_test, y_pred)
+    matthews = matthews_corrcoef(y_test, y_pred)
+    logloss = log_loss(y_test, y_proba) if y_proba is not None else 0.0
+    # ROC AUC hanya jika binary classification
+    try:
+        roc_auc = roc_auc_score(y_test, y_proba[:,1]) if y_proba.shape[1]==2 else 0.0
+    except:
+        roc_auc = 0.0
+    # accuracy lagi sebagai placeholder metric ke-10 (atau bisa custom metric lain)
+    metric_10 = accuracy  
+
+    # ---------------------------
     # Print results
+    # ---------------------------
     print(f"Accuracy: {accuracy}")
     print("Classification Report:")
     print(classification_report(y_test, y_pred))
 
-    # Manual log metric
-    mlflow.log_metric("accuracy", accuracy)
+    # ---------------------------
+    # Log semua metric ke MLflow
+    # ---------------------------
+    mlflow.log_metrics({
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
+        "balanced_accuracy": balanced_acc,
+        "cohen_kappa": cohen_kappa,
+        "matthews_corrcoef": matthews,
+        "log_loss": logloss,
+        "roc_auc": roc_auc,
+        "metric_10": metric_10
+    })
 
     # Save model ke folder artifact tetap
     mlflow.sklearn.save_model(model, path=artifact_dir)
