@@ -71,17 +71,22 @@ with mlflow.start_run():
     precision = precision_score(y_test, y_pred, average="weighted", zero_division=0)
     recall = recall_score(y_test, y_pred, average="weighted", zero_division=0)
     f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+    
+    # Additional recommended metrics
+    f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
+    recall_macro = recall_score(y_test, y_pred, average="macro", zero_division=0)
+    
     balanced_acc = balanced_accuracy_score(y_test, y_pred)
     cohen_kappa = cohen_kappa_score(y_test, y_pred)
     matthews = matthews_corrcoef(y_test, y_pred)
     logloss = log_loss(y_test, y_proba) if y_proba is not None else 0.0
-    # ROC AUC hanya jika binary classification
+    
+    # ROC AUC (only when 2 classes)
     try:
-        roc_auc = roc_auc_score(y_test, y_proba[:,1]) if y_proba.shape[1]==2 else 0.0
+        roc_auc = roc_auc_score(y_test, y_proba[:, 1]) if y_proba.shape[1] == 2 else 0.0
     except:
         roc_auc = 0.0
-    # accuracy lagi sebagai placeholder metric ke-10 (atau bisa custom metric lain)
-    metric_10 = accuracy  
+
 
     # ---------------------------
     # Print results
@@ -94,17 +99,19 @@ with mlflow.start_run():
     # Log semua metric ke MLflow
     # ---------------------------
     mlflow.log_metrics({
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1,
-        "balanced_accuracy": balanced_acc,
-        "cohen_kappa": cohen_kappa,
-        "matthews_corrcoef": matthews,
-        "log_loss": logloss,
-        "roc_auc": roc_auc,
-        "metric_10": metric_10
+    "accuracy": accuracy,
+    "precision_weighted": precision,
+    "recall_weighted": recall,
+    "f1_weighted": f1,
+    "f1_macro": f1_macro,
+    "recall_macro": recall_macro,
+    "balanced_accuracy": balanced_acc,
+    "cohen_kappa": cohen_kappa,
+    "matthews_corrcoef": matthews,
+    "log_loss": logloss
     })
+
+
 
     # Save model ke folder artifact tetap
     mlflow.sklearn.save_model(model, path=artifact_dir)
