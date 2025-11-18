@@ -42,6 +42,7 @@ jobs:
             --experiment-name "Student Performance Prediction" \
             -P data_path=data/StudentsPerformance_preprocessing.csv
 
+
       # 6️⃣ Get latest MLflow run id
       - name: Get latest MLflow run id
         run: |
@@ -55,10 +56,16 @@ jobs:
           fi
 
       # 7️⃣ Zip MLflow artifact folder
-      - name: Zip MLflow artifact
+      - name: Zip MLflow artifacts & runs
         run: |
-          cd MLProject/artifacts
-          zip -r random_forest_model.zip random_forest_model
+          cd MLProject
+          zip -r mlflow_artifacts.zip artifacts mlruns
+
+      - name: Upload MLflow artifacts & runs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow_artifacts
+          path: MLProject/mlflow_artifacts.zip
 
       # 8️⃣ Upload artifact zip to GitHub
       - name: Upload to GitHub
