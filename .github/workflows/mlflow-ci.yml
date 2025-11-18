@@ -12,105 +12,115 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      # 1️⃣ Checkout repo
       - name: Run actions/checkout@v3
         uses: actions/checkout@v3
 
-      # 🔄 Post checkout
       - name: Post Run actions/checkout@v3
         if: always()
         run: echo "Post checkout completed"
 
-      # 2️⃣ Python
       - name: Set up Python 3.12.7
         uses: actions/setup-python@v4
         with:
           python-version: "3.12.7"
 
-      # 🔄 Post Python setup
       - name: Post Set up Python 3.12.7
         if: always()
         run: echo "Post Python setup completed"
 
-      # 3️⃣ Check Environment
       - name: Check Env
         run: env
 
-      # 4️⃣ Install dependencies (global)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install mlflow==2.19.0 pandas scikit-learn docker joblib zipfile36
 
-      # 5️⃣ Run MLflow project
       - name: Run mlflow project
         working-directory: MLProject
         env:
-          MLFLOW_TRACKING_URI: "${{ github.workspace }}/MLProject/mlruns"
+          MLFLOW_TRACKING_URI: "file://${{ github.workspace }}/MLProject/mlruns"
         run: |
           mlflow run . --env-manager=local \
             --experiment-name "Student Performance Prediction" \
             -P data_path=data/StudentsPerformance_preprocessing.csv
 
-      # 6️⃣ Get latest run_id
-      - name: Get latest MLflow run_id
+      - name: Find latest MLflow run folder (robust)
         run: |
-          EXP_DIR="${GITHUB_WORKSPACE}/MLProject/mlruns/0"
-          RUN_ID=$(ls -dt ${EXP_DIR}/*/ | head -n 1 | xargs basename)
-          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-          echo "Latest MLflow run_id = $RUN_ID"
+          set -euo pipefail
+          MLROOT="${GITHUB_WORKSPACE}/MLProject/mlruns"
+          echo "Looking for mlruns in: $MLROOT"
 
+          if [ ! -d "$MLROOT" ]; then
+            echo "ERROR: mlruns directory not found"
+            exit 1
+          fi
+
+          LATEST_META=$(find "$MLROOT" -type f -name "meta.yaml" -printf '%T@ %p\n' | sort -k1,1nr | head -n1 | awk '{print $2}')
+
+          if [ -z "$LATEST_META" ]; then
+            echo "ERROR: No MLflow meta.yaml found"
+            exit 1
+          fi
+
+          RUN_DIR=$(dirname "$LATEST_META")
+          RUN_ID=$(basename "$RUN_DIR")
+          EXP_DIR=$(dirname "$RUN_DIR")
+          EXP_ID=$(basename "$EXP_DIR")
+
+          echo "RUN_DIR=$RUN_DIR" >> $GITHUB_ENV
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+          echo "EXP_ID=$EXP_ID" >> $GITHUB_ENV
+          echo "Latest MLflow run: experiment=$EXP_ID, run=$RUN_ID"
+
+      - name: Install zip CLI
+        run: sudo apt-get install -y zip
 
       - name: Zip MLflow mlruns folder
         run: |
           cd MLProject
           zip -r mlruns.zip mlruns
 
-      # 🗃️ Upload mlruns.zip ke GitHub Artifact
       - name: Upload mlruns to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: mlflow_mlruns
           path: MLProject/mlruns.zip
 
-      # 7️⃣ Install Python dependencies inside workflow (agar muncul step)
       - name: Install Python dependencies
         run: |
           pip install numpy pandas scikit-learn mlflow
 
-      # 8️⃣ Upload to GitHub (pengganti Upload to Google Drive)
       - name: Upload to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: student-performance-artifact
-          path: MLProject/mlruns/0/${{ env.RUN_ID }}/artifacts/model
+          name: student-performance-model
+          path: ${{ env.RUN_DIR }}/artifacts/model
 
-      # 9️⃣ Build Docker Model
+      - name: Enable Docker service
+        run: |
+          sudo systemctl start docker || true
+
       - name: Build Docker Model
         run: |
-          ART="${GITHUB_WORKSPACE}/MLProject/mlruns/0/${RUN_ID}/artifacts/model"
+          ART="${{ env.RUN_DIR }}/artifacts/model"
           mlflow models build-docker -m "$ART" -n student-performance-model
 
-      # 🔟 Login to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 🔄 Post Docker Login
       - name: Post Log in to Docker Hub
         if: always()
         run: echo "Post Docker Hub login completed"
 
-      # 1️⃣1️⃣ Tag Docker image
       - name: Tag Docker Image
         run: docker tag student-performance-model ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
 
-      # 1️⃣2️⃣ Push Docker image
       - name: Push Docker Image
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/student-performance-model:latest
 
-      # 1️⃣3️⃣ Complete job
       - name: Complete job
         run: echo "CI workflow finished successfully!"
